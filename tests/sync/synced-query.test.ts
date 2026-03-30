@@ -133,12 +133,13 @@ describe('createSyncedQuery', () => {
       dispose();
     });
 
-    it('calls rxNostr.use() with backward req', () => {
+    it('calls rxNostr.use() with backward req', async () => {
       const { dispose } = createSyncedQuery(
         mockRxNostr as any,
         store,
         { filter: { kinds: [1] }, strategy: 'backward' },
       );
+      await wait(); // wait for async sinceTracker
       expect(mockRxNostr.use).toHaveBeenCalled();
       dispose();
     });
@@ -186,7 +187,7 @@ describe('createSyncedQuery', () => {
   });
 
   describe('on option (relay targeting)', () => {
-    it('passes on option to rxNostr.use()', () => {
+    it('passes on option to rxNostr.use()', async () => {
       const { dispose } = createSyncedQuery(
         mockRxNostr as any,
         store,
@@ -196,6 +197,7 @@ describe('createSyncedQuery', () => {
           on: { relays: ['wss://specific.relay'] },
         },
       );
+      await wait(); // wait for async sinceTracker
       const call = mockRxNostr.use.mock.calls[0];
       expect(call[1]).toEqual(
         expect.objectContaining({ on: { relays: ['wss://specific.relay'] } }),
@@ -297,6 +299,7 @@ describe('createSyncedQuery', () => {
         store,
         { filter: { kinds: [1] }, strategy: 'backward', staleTime: 60_000 },
       );
+      await wait(); // wait for async sinceTracker
       const firstCallCount = mockRxNostr.use.mock.calls.length;
       expect(firstCallCount).toBeGreaterThan(0);
 

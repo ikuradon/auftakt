@@ -1,6 +1,7 @@
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
 import type { CachedEvent, NostrFilter, SyncStatus } from '../types.js';
 import type { EventStore } from '../core/store.js';
+import { createSinceTracker } from './since-tracker.js';
 
 interface SyncedQueryOptions {
   filter: NostrFilter;
@@ -42,22 +43,32 @@ export function createSyncedQuery(
     });
   }
 
+  const sinceTracker = createSinceTracker(store);
+
   function startBackward(filter: NostrFilter, onComplete: () => void): void {
     backwardSubscription?.unsubscribe();
 
-    // Create a minimal RxReq-like object for backward
-    const rxReq = createBackwardReq();
-    const useOptions = options.on ? { on: options.on } : undefined;
+    // Apply cache-aware since
+    void sinceTracker.getSince(filter).then(latestCached => {
+      if (disposed) return;
 
-    backwardSubscription = rxNostr.use(rxReq, useOptions).subscribe({
-      complete: () => {
-        lastFetchedAt = Date.now();
-        onComplete();
-      },
+      const adjustedFilter = latestCached
+        ? { ...filter, since: latestCached }
+        : filter;
+
+      const rxReq = createBackwardReq();
+      const useOptions = options.on ? { on: options.on } : undefined;
+
+      backwardSubscription = rxNostr.use(rxReq, useOptions).subscribe({
+        complete: () => {
+          lastFetchedAt = Date.now();
+          onComplete();
+        },
+      });
+
+      rxReq.emit(adjustedFilter);
+      rxReq.over();
     });
-
-    rxReq.emit(filter);
-    rxReq.over();
   }
 
   function startForward(filter: NostrFilter): void {
