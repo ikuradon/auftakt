@@ -239,7 +239,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
           const stored = buildStoredEvent(event, meta);
           await backend.put(stored);
           changeSubject.next({ event, type: 'replaced', relay: meta?.relay });
-          queryManager.notifyPotentialChange(stored);
+          queryManager.notifyPotentialChange(stored, 'replaced');
           return 'replaced';
         }
       }
@@ -255,7 +255,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
           const stored = buildStoredEvent(event, meta);
           await backend.put(stored);
           changeSubject.next({ event, type: 'replaced', relay: meta?.relay });
-          queryManager.notifyPotentialChange(stored);
+          queryManager.notifyPotentialChange(stored, 'replaced');
           return 'replaced';
         }
       }
@@ -274,7 +274,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       }
 
       changeSubject.next({ event, type: 'added', relay: meta?.relay });
-      queryManager.notifyPotentialChange(stored);
+      queryManager.notifyPotentialChange(stored, 'added');
       cleanPendingDeletions();
       return 'added';
     },
