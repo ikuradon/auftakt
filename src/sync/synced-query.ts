@@ -21,6 +21,35 @@ interface RxNostrLike {
   use(rxReq: any, options?: any): Observable<any>;
 }
 
+// Shared backward REQ pool (module-level singleton)
+interface PoolEntry {
+  subscription: Subscription;
+  refCount: number;
+  completionCallbacks: Array<() => void>;
+  completed: boolean;
+}
+
+const backwardReqPool = new Map<string, PoolEntry>();
+
+/** @internal Reset pool for testing */
+export function _resetReqPool(): void {
+  for (const entry of backwardReqPool.values()) {
+    entry.subscription.unsubscribe();
+  }
+  backwardReqPool.clear();
+}
+
+function hashFilter(filter: NostrFilter): string {
+  const normalized: Record<string, unknown> = {};
+  for (const key of Object.keys(filter).sort()) {
+    const val = (filter as Record<string, unknown>)[key];
+    if (val !== undefined) {
+      normalized[key] = Array.isArray(val) ? [...val].sort() : val;
+    }
+  }
+  return JSON.stringify(normalized);
+}
+
 export function createSyncedQuery(
   rxNostr: RxNostrLike,
   store: EventStore,
@@ -45,10 +74,11 @@ export function createSyncedQuery(
 
   const sinceTracker = createSinceTracker(store);
 
-  function startBackward(filter: NostrFilter, onComplete: () => void): void {
-    backwardSubscription?.unsubscribe();
+  let currentBackwardHash: string | null = null;
 
-    // Apply cache-aware since
+  function startBackward(filter: NostrFilter, onComplete: () => void): void {
+    releaseBackwardPool();
+
     void sinceTracker.getSince(filter).then(latestCached => {
       if (disposed) return;
 
@@ -56,19 +86,56 @@ export function createSyncedQuery(
         ? { ...filter, since: latestCached }
         : filter;
 
+      const hash = hashFilter(adjustedFilter);
+      currentBackwardHash = hash;
+
+      const existing = backwardReqPool.get(hash);
+      if (existing && !existing.completed) {
+        existing.refCount++;
+        existing.completionCallbacks.push(() => {
+          lastFetchedAt = Date.now();
+          onComplete();
+        });
+        return;
+      }
+
       const rxReq = createBackwardReq();
       const useOptions = options.on ? { on: options.on } : undefined;
 
-      backwardSubscription = rxNostr.use(rxReq, useOptions).subscribe({
-        complete: () => {
+      const entry: PoolEntry = {
+        subscription: rxNostr.use(rxReq, useOptions).subscribe({
+          complete: () => {
+            entry.completed = true;
+            for (const cb of entry.completionCallbacks) cb();
+          },
+        }),
+        refCount: 1,
+        completionCallbacks: [() => {
           lastFetchedAt = Date.now();
           onComplete();
-        },
-      });
+        }],
+        completed: false,
+      };
+
+      backwardReqPool.set(hash, entry);
 
       rxReq.emit(adjustedFilter);
       rxReq.over();
     });
+  }
+
+  function releaseBackwardPool(): void {
+    if (currentBackwardHash) {
+      const entry = backwardReqPool.get(currentBackwardHash);
+      if (entry) {
+        entry.refCount--;
+        if (entry.refCount <= 0) {
+          entry.subscription.unsubscribe();
+          backwardReqPool.delete(currentBackwardHash);
+        }
+      }
+      currentBackwardHash = null;
+    }
   }
 
   function startForward(filter: NostrFilter): void {
@@ -119,6 +186,7 @@ export function createSyncedQuery(
   }
 
   function cleanupSubscriptions(): void {
+    releaseBackwardPool();
     backwardSubscription?.unsubscribe();
     forwardSubscription?.unsubscribe();
     backwardSubscription = null;

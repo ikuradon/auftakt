@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Subject, firstValueFrom, filter, Observable } from 'rxjs';
-import { createSyncedQuery } from '../../src/sync/synced-query.js';
+import { createSyncedQuery, _resetReqPool } from '../../src/sync/synced-query.js';
 import { createEventStore } from '../../src/core/store.js';
 import { connectStore } from '../../src/sync/global-feed.js';
 import { memoryBackend } from '../../src/backends/memory.js';
@@ -85,6 +85,7 @@ describe('createSyncedQuery', () => {
   let mockRxNostr: ReturnType<typeof createMockRxNostr>;
 
   beforeEach(() => {
+    _resetReqPool();
     store = createEventStore({ backend: memoryBackend() });
     mockRxNostr = createMockRxNostr();
     connectStore(mockRxNostr as any, store);
