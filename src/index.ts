@@ -1,5 +1,6 @@
 export { createEventStore } from './core/store.js';
 export type { EventStore, EventStoreOptions } from './core/store.js';
+export { saveSnapshot, loadSnapshot } from './core/snapshot.js';
 export type {
   NostrEvent,
   CachedEvent,
