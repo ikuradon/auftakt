@@ -59,8 +59,10 @@ describe('store.fetchById with relay fetch (tsunagiya)', () => {
     pool.install();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     pool.uninstall();
+    // Wait for async CloseEvent callbacks to flush
+    await new Promise(r => setTimeout(r, 50));
   });
 
   it('fetches from relay when not in local cache', async () => {
