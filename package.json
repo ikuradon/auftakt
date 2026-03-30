@@ -49,7 +49,7 @@
     "rxjs": "^7.8.0"
   },
   "dependencies": {
-    "nostr-typedef": "^0.9.0"
+    "nostr-typedef": "^0.13.0"
   },
   "devDependencies": {
     "@ikuradon/tsunagiya": "^0.4.0",
