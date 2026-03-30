@@ -12,7 +12,7 @@
 
 ---
 
-## File Structure
+## File Structure (実装後の最終状態)
 
 ```
 @ikuradon/auftakt/
@@ -20,36 +20,45 @@
 ├── tsconfig.json
 ├── vitest.config.ts
 ├── src/
-│   ├── index.ts                    # メインエントリポイント（createEventStore再エクスポート）
-│   ├── types.ts                    # 共通型定義（CachedEvent, StoreChange, AddResult, NostrFilter等）
+│   ├── index.ts                    # メインエントリポイント
+│   ├── types.ts                    # 共通型定義
 │   ├── core/
-│   │   ├── store.ts                # NostrEventStore本体（add, query, changes$, fetchById）
-│   │   ├── nip-rules.ts            # イベント分類・Replaceable/Addressable/Deletion判定
+│   │   ├── store.ts                # NostrEventStore本体（add, query, fetchById, changes$）
+│   │   ├── nip-rules.ts            # イベント分類・Replaceable/Addressable判定
 │   │   ├── filter-matcher.ts       # Nostrフィルタとイベントのマッチング
-│   │   ├── query-manager.ts        # Reactive query管理（登録・通知・マイクロバッチング）
+│   │   ├── query-manager.ts        # Reactive query管理（登録・通知・マイクロバッチング・unsubscribeクリーンアップ）
 │   │   └── negative-cache.ts       # ネガティブキャッシュ（TTL付き）
 │   ├── backends/
 │   │   ├── interface.ts            # StorageBackendインターフェース
 │   │   ├── memory.ts               # メモリバックエンド実装
-│   │   └── indexeddb.ts            # IndexedDBバックエンド実装
+│   │   └── indexeddb.ts            # IndexedDBバックエンド実装（SSRフォールバック、エラーポリシー）
 │   └── sync/
 │       ├── index.ts                # sync エントリポイント
-│       ├── global-feed.ts          # connectStore()
-│       ├── synced-query.ts         # createSyncedQuery()
-│       └── publish.ts              # publishEvent()
+│       ├── global-feed.ts          # connectStore()（reconcileDeletions統合）
+│       ├── synced-query.ts         # createSyncedQuery()（REQライフサイクル、cache-aware since）
+│       ├── publish.ts              # publishEvent()
+│       ├── deletion-reconcile.ts   # 起動時kind:5整合性チェック
+│       └── since-tracker.ts        # cache-aware since自動調整
 ├── tests/
 │   ├── core/
-│   │   ├── nip-rules.test.ts
-│   │   ├── filter-matcher.test.ts
-│   │   ├── store.test.ts
-│   │   └── query-manager.test.ts
+│   │   ├── nip-rules.test.ts       # 16 tests
+│   │   ├── filter-matcher.test.ts  #  9 tests
+│   │   ├── negative-cache.test.ts  #  4 tests
+│   │   ├── store.test.ts           # 24 tests
+│   │   ├── store-fetch-relay.test.ts # 3 tests (tsunagiya統合)
+│   │   └── query-manager.test.ts   #  2 tests
 │   ├── backends/
-│   │   ├── memory.test.ts
-│   │   └── indexeddb.test.ts
+│   │   ├── memory.test.ts          # 12 tests
+│   │   ├── indexeddb.test.ts       # 11 tests
+│   │   └── indexeddb-fallback.test.ts # 1 test (SSR)
 │   └── sync/
-│       ├── global-feed.test.ts
-│       ├── synced-query.test.ts
-│       └── publish.test.ts
+│       ├── global-feed.test.ts     #  5 tests
+│       ├── synced-query.test.ts    # 12 tests
+│       ├── synced-query-since.test.ts # 2 tests
+│       ├── publish.test.ts         #  4 tests
+│       ├── deletion-reconcile.test.ts # 4 tests
+│       ├── since-tracker.test.ts   #  3 tests
+│       └── filter-mismatch-warn.test.ts # 1 test
 └── docs/
     ├── design.md
     └── plans/
@@ -67,7 +76,7 @@
 - Create: `src/index.ts`
 - Create: `src/types.ts`
 
-- [ ] **Step 1: package.json を作成**
+- [x] **Step 1: package.json を作成**
 
 ```json
 {
@@ -122,7 +131,7 @@
 }
 ```
 
-- [ ] **Step 2: tsconfig.json を作成**
+- [x] **Step 2: tsconfig.json を作成**
 
 ```json
 {
@@ -147,7 +156,7 @@
 }
 ```
 
-- [ ] **Step 3: vitest.config.ts を作成**
+- [x] **Step 3: vitest.config.ts を作成**
 
 ```typescript
 import { defineConfig } from 'vitest/config';
@@ -171,7 +180,7 @@ export default defineConfig({
 });
 ```
 
-- [ ] **Step 4: 共通型定義 src/types.ts を作成**
+- [x] **Step 4: 共通型定義 src/types.ts を作成**
 
 ```typescript
 import type { Nostr } from 'nostr-typedef';
@@ -219,7 +228,7 @@ export interface NostrFilter {
 export type SyncStatus = 'cached' | 'fetching' | 'live' | 'complete';
 ```
 
-- [ ] **Step 5: メインエントリポイント src/index.ts を作成**
+- [x] **Step 5: メインエントリポイント src/index.ts を作成**
 
 ```typescript
 export { createEventStore } from './core/store.js';
@@ -233,17 +242,17 @@ export type {
 } from './types.js';
 ```
 
-- [ ] **Step 6: 依存関係をインストール**
+- [x] **Step 6: 依存関係をインストール**
 
 Run: `cd /root/src/github.com/ikuradon/auftakt && pnpm install`
 Expected: 依存関係がインストールされ `node_modules` が作成される
 
-- [ ] **Step 7: TypeScript のコンパイルチェック**
+- [x] **Step 7: TypeScript のコンパイルチェック**
 
 Run: `pnpm lint`
 Expected: エラーなし（createEventStore が未定義のため一時的にエラーが出る場合は src/index.ts の export 行をコメントアウト）
 
-- [ ] **Step 8: git 初期化とコミット**
+- [x] **Step 8: git 初期化とコミット**
 
 ```bash
 git init
@@ -260,7 +269,7 @@ git commit -m "chore: initialize project with package.json, tsconfig, vitest"
 - Create: `src/core/nip-rules.ts`
 - Create: `tests/core/nip-rules.test.ts`
 
-- [ ] **Step 1: テストファイルを作成**
+- [x] **Step 1: テストファイルを作成**
 
 ```typescript
 // tests/core/nip-rules.test.ts
@@ -386,12 +395,12 @@ describe('compareEventsForReplacement', () => {
 });
 ```
 
-- [ ] **Step 2: テストを実行して失敗を確認**
+- [x] **Step 2: テストを実行して失敗を確認**
 
 Run: `pnpm test -- tests/core/nip-rules.test.ts`
 Expected: FAIL — モジュールが見つからない
 
-- [ ] **Step 3: nip-rules.ts を実装**
+- [x] **Step 3: nip-rules.ts を実装**
 
 ```typescript
 // src/core/nip-rules.ts
@@ -458,12 +467,12 @@ export function compareEventsForReplacement(
 }
 ```
 
-- [ ] **Step 4: テストを実行して全パスを確認**
+- [x] **Step 4: テストを実行して全パスを確認**
 
 Run: `pnpm test -- tests/core/nip-rules.test.ts`
 Expected: 全テスト PASS
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/core/nip-rules.ts tests/core/nip-rules.test.ts
@@ -478,7 +487,7 @@ git commit -m "feat: add NIP rules engine for event classification and replaceme
 - Create: `src/core/filter-matcher.ts`
 - Create: `tests/core/filter-matcher.test.ts`
 
-- [ ] **Step 1: テストファイルを作成**
+- [x] **Step 1: テストファイルを作成**
 
 ```typescript
 // tests/core/filter-matcher.test.ts
@@ -549,12 +558,12 @@ describe('matchesFilter', () => {
 });
 ```
 
-- [ ] **Step 2: テスト実行して失敗を確認**
+- [x] **Step 2: テスト実行して失敗を確認**
 
 Run: `pnpm test -- tests/core/filter-matcher.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: filter-matcher.ts を実装**
+- [x] **Step 3: filter-matcher.ts を実装**
 
 ```typescript
 // src/core/filter-matcher.ts
@@ -587,12 +596,12 @@ export function matchesFilter(event: Nostr.Event, filter: NostrFilter): boolean 
 }
 ```
 
-- [ ] **Step 4: テスト実行して全パスを確認**
+- [x] **Step 4: テスト実行して全パスを確認**
 
 Run: `pnpm test -- tests/core/filter-matcher.test.ts`
 Expected: 全テスト PASS
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/core/filter-matcher.ts tests/core/filter-matcher.test.ts
@@ -608,7 +617,7 @@ git commit -m "feat: add Nostr filter matcher with tag query support"
 - Create: `src/backends/memory.ts`
 - Create: `tests/backends/memory.test.ts`
 
-- [ ] **Step 1: バックエンドインターフェースを作成**
+- [x] **Step 1: バックエンドインターフェースを作成**
 
 ```typescript
 // src/backends/interface.ts
@@ -637,7 +646,7 @@ export interface StorageBackend {
 }
 ```
 
-- [ ] **Step 2: メモリバックエンドのテストを作成**
+- [x] **Step 2: メモリバックエンドのテストを作成**
 
 ```typescript
 // tests/backends/memory.test.ts
@@ -762,12 +771,12 @@ describe('memoryBackend', () => {
 });
 ```
 
-- [ ] **Step 3: テスト実行して失敗を確認**
+- [x] **Step 3: テスト実行して失敗を確認**
 
 Run: `pnpm test -- tests/backends/memory.test.ts`
 Expected: FAIL
 
-- [ ] **Step 4: メモリバックエンドを実装**
+- [x] **Step 4: メモリバックエンドを実装**
 
 ```typescript
 // src/backends/memory.ts
@@ -870,12 +879,12 @@ export function memoryBackend(): StorageBackend {
 }
 ```
 
-- [ ] **Step 5: テスト実行して全パスを確認**
+- [x] **Step 5: テスト実行して全パスを確認**
 
 Run: `pnpm test -- tests/backends/memory.test.ts`
 Expected: 全テスト PASS
 
-- [ ] **Step 6: コミット**
+- [x] **Step 6: コミット**
 
 ```bash
 git add src/backends/interface.ts src/backends/memory.ts tests/backends/memory.test.ts
@@ -893,7 +902,7 @@ git commit -m "feat: add storage backend interface and memory implementation"
 - Create: `src/core/query-manager.ts`
 - Create: `tests/core/store.test.ts`
 
-- [ ] **Step 1: query-manager.ts を作成**
+- [x] **Step 1: query-manager.ts を作成**
 
 ```typescript
 // src/core/query-manager.ts
@@ -998,7 +1007,7 @@ export class QueryManager {
 }
 ```
 
-- [ ] **Step 2: store.ts のテストを作成**
+- [x] **Step 2: store.ts のテストを作成**
 
 ```typescript
 // tests/core/store.test.ts
@@ -1195,12 +1204,12 @@ describe('NostrEventStore', () => {
 });
 ```
 
-- [ ] **Step 3: テスト実行して失敗を確認**
+- [x] **Step 3: テスト実行して失敗を確認**
 
 Run: `pnpm test -- tests/core/store.test.ts`
 Expected: FAIL
 
-- [ ] **Step 4: store.ts を実装**
+- [x] **Step 4: store.ts を実装**
 
 ```typescript
 // src/core/store.ts
@@ -1431,17 +1440,17 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 }
 ```
 
-- [ ] **Step 5: テスト実行して全パスを確認**
+- [x] **Step 5: テスト実行して全パスを確認**
 
 Run: `pnpm test -- tests/core/store.test.ts`
 Expected: 全テスト PASS
 
-- [ ] **Step 6: カバレッジを確認**
+- [x] **Step 6: カバレッジを確認**
 
 Run: `pnpm test:coverage`
 Expected: core/ のカバレッジが 80% 以上
 
-- [ ] **Step 7: コミット**
+- [x] **Step 7: コミット**
 
 ```bash
 git add src/core/store.ts src/core/query-manager.ts tests/core/store.test.ts
@@ -1457,7 +1466,7 @@ git commit -m "feat: implement NostrEventStore with NIP semantics and reactive q
 - Create: `src/sync/global-feed.ts`
 - Create: `tests/sync/global-feed.test.ts`
 
-- [ ] **Step 1: テストを作成**
+- [x] **Step 1: テストを作成**
 
 ```typescript
 // tests/sync/global-feed.test.ts
@@ -1557,12 +1566,12 @@ describe('connectStore', () => {
 });
 ```
 
-- [ ] **Step 2: テスト実行して失敗を確認**
+- [x] **Step 2: テスト実行して失敗を確認**
 
 Run: `pnpm test -- tests/sync/global-feed.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: global-feed.ts を実装**
+- [x] **Step 3: global-feed.ts を実装**
 
 ```typescript
 // src/sync/global-feed.ts
@@ -1591,7 +1600,7 @@ export function connectStore(
 }
 ```
 
-- [ ] **Step 4: sync/index.ts を作成**
+- [x] **Step 4: sync/index.ts を作成**
 
 ```typescript
 // src/sync/index.ts
@@ -1600,7 +1609,7 @@ export { createSyncedQuery } from './synced-query.js';
 export { publishEvent } from './publish.js';
 ```
 
-- [ ] **Step 5: synced-query.ts と publish.ts のスタブを作成**（後のタスクで実装）
+- [x] **Step 5: synced-query.ts と publish.ts のスタブを作成**（後のタスクで実装）
 
 ```typescript
 // src/sync/synced-query.ts
@@ -1616,12 +1625,12 @@ export function publishEvent(..._args: any[]): any {
 }
 ```
 
-- [ ] **Step 6: テスト実行して全パスを確認**
+- [x] **Step 6: テスト実行して全パスを確認**
 
 Run: `pnpm test -- tests/sync/global-feed.test.ts`
 Expected: 全テスト PASS
 
-- [ ] **Step 7: コミット**
+- [x] **Step 7: コミット**
 
 ```bash
 git add src/sync/ tests/sync/global-feed.test.ts
@@ -1636,7 +1645,7 @@ git commit -m "feat: implement connectStore for global event feed"
 - Modify: `src/sync/synced-query.ts`
 - Create: `tests/sync/synced-query.test.ts`
 
-- [ ] **Step 1: テストを作成**
+- [x] **Step 1: テストを作成**
 
 ```typescript
 // tests/sync/synced-query.test.ts
@@ -1744,12 +1753,12 @@ describe('createSyncedQuery', () => {
 });
 ```
 
-- [ ] **Step 2: テスト実行して失敗を確認**
+- [x] **Step 2: テスト実行して失敗を確認**
 
 Run: `pnpm test -- tests/sync/synced-query.test.ts`
 Expected: FAIL（スタブがthrow）
 
-- [ ] **Step 3: synced-query.ts を実装**
+- [x] **Step 3: synced-query.ts を実装**
 
 ```typescript
 // src/sync/synced-query.ts
@@ -1834,12 +1843,12 @@ export function createSyncedQuery(
 }
 ```
 
-- [ ] **Step 4: テスト実行して全パスを確認**
+- [x] **Step 4: テスト実行して全パスを確認**
 
 Run: `pnpm test -- tests/sync/synced-query.test.ts`
 Expected: 全テスト PASS
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/sync/synced-query.ts tests/sync/synced-query.test.ts
@@ -1854,7 +1863,7 @@ git commit -m "feat: implement createSyncedQuery with reactive store queries and
 - Modify: `src/sync/publish.ts`
 - Create: `tests/sync/publish.test.ts`
 
-- [ ] **Step 1: テストを作成**
+- [x] **Step 1: テストを作成**
 
 ```typescript
 // tests/sync/publish.test.ts
@@ -1907,12 +1916,12 @@ describe('publishEvent', () => {
 });
 ```
 
-- [ ] **Step 2: テスト実行して失敗を確認**
+- [x] **Step 2: テスト実行して失敗を確認**
 
 Run: `pnpm test -- tests/sync/publish.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: publish.ts を実装**
+- [x] **Step 3: publish.ts を実装**
 
 ```typescript
 // src/sync/publish.ts
@@ -1945,12 +1954,12 @@ export function publishEvent(
 }
 ```
 
-- [ ] **Step 4: テスト実行して全パスを確認**
+- [x] **Step 4: テスト実行して全パスを確認**
 
 Run: `pnpm test -- tests/sync/publish.test.ts`
 Expected: 全テスト PASS
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/sync/publish.ts tests/sync/publish.test.ts
@@ -1965,7 +1974,7 @@ git commit -m "feat: implement publishEvent with optimistic store update"
 - Create: `src/backends/indexeddb.ts`
 - Create: `tests/backends/indexeddb.test.ts`
 
-- [ ] **Step 1: テストを作成（fake-indexeddb 使用）**
+- [x] **Step 1: テストを作成（fake-indexeddb 使用）**
 
 ```typescript
 // tests/backends/indexeddb.test.ts
@@ -2048,12 +2057,12 @@ describe('indexedDBBackend', () => {
 });
 ```
 
-- [ ] **Step 2: テスト実行して失敗を確認**
+- [x] **Step 2: テスト実行して失敗を確認**
 
 Run: `pnpm test -- tests/backends/indexeddb.test.ts`
 Expected: FAIL
 
-- [ ] **Step 3: indexeddb.ts を実装**
+- [x] **Step 3: indexeddb.ts を実装**
 
 ```typescript
 // src/backends/indexeddb.ts
@@ -2226,12 +2235,12 @@ export function indexedDBBackend(dbName: string): StorageBackend {
 }
 ```
 
-- [ ] **Step 4: テスト実行して全パスを確認**
+- [x] **Step 4: テスト実行して全パスを確認**
 
 Run: `pnpm test -- tests/backends/indexeddb.test.ts`
 Expected: 全テスト PASS
 
-- [ ] **Step 5: コミット**
+- [x] **Step 5: コミット**
 
 ```bash
 git add src/backends/indexeddb.ts tests/backends/indexeddb.test.ts
@@ -2246,7 +2255,7 @@ git commit -m "feat: implement IndexedDB storage backend with compound indexes"
 - Modify: `src/index.ts`
 - Modify: `src/sync/index.ts`
 
-- [ ] **Step 1: src/index.ts のエクスポートを整理**
+- [x] **Step 1: src/index.ts のエクスポートを整理**
 
 ```typescript
 // src/index.ts
@@ -2262,17 +2271,17 @@ export type {
 } from './types.js';
 ```
 
-- [ ] **Step 2: 全テスト + カバレッジを実行**
+- [x] **Step 2: 全テスト + カバレッジを実行**
 
 Run: `pnpm test:coverage`
 Expected: 全テスト PASS、src/ のカバレッジ 80% 以上
 
-- [ ] **Step 3: TypeScript ビルドを確認**
+- [x] **Step 3: TypeScript ビルドを確認**
 
 Run: `pnpm build`
 Expected: `dist/` にJSファイルと型定義が生成される
 
-- [ ] **Step 4: コミット**
+- [x] **Step 4: コミット**
 
 ```bash
 git add -A
@@ -2281,43 +2290,119 @@ git commit -m "feat: finalize MVP exports and verify coverage"
 
 ---
 
-## Self-Review Checklist
+---
 
-### Spec Coverage
+## 追加タスク（spec突合せで発見・実装）
 
-| Spec セクション | タスク |
-|---------------|--------|
-| §4.1 Store作成 | Task 5 (createEventStore) |
-| §4.2 connectStore | Task 6 |
-| §4.3 store.query() | Task 5 |
-| §4.3.1 store.changes$ | Task 5 |
-| §4.4 createSyncedQuery | Task 7 |
-| §4.5 publishEvent | Task 8 |
-| §4.6 fetchById | Task 5 (基盤のみ。完全な実装はv1.1) |
-| §5.1 store.add() ロジック | Task 5 |
-| §5.2 削除済みイベント | Task 5 (kind:5テスト含む) |
-| §5.3 セキュリティモデル | 設計のみ（実装は信頼モデルを前提） |
-| §5.4 クエリフィルタリング | Task 5 (query-manager) |
-| §6.1 IndexedDB | Task 9 |
-| §6.2 メモリバックエンド | Task 4 |
-| §7.1 マイクロバッチング | Task 5 (query-manager) |
-| §8 CachedEvent型 | Task 1 (types.ts) |
+計画策定後のspecレビューで欠落が判明し、TDDで追加実装したタスク。
 
-### 未カバー（v1.1以降）
+### Task 11: ネガティブキャッシュ ✅
 
-- §4.6 fetchById の完全実装（ネガティブキャッシュ、in-flight dedup）
+- [x] テスト作成（4 tests）
+- [x] `src/core/negative-cache.ts` 実装
+- [x] コミット: `d9bc6b7`
+
+### Task 12: createSyncedQuery rxNostr REQライフサイクル書き直し ✅
+
+spec C1/C2: SyncedQueryがrxNostrを受け取り、backward/forward REQを管理する。
+
+- [x] テスト書き直し（12 tests）— rxNostr mock、strategy遷移、on option
+- [x] `src/sync/synced-query.ts` 全面書き直し — RxReq作成、EOSE検知、staleTime
+- [x] コミット: `2e65845`
+
+### Task 13: deletion-reconcile.ts ✅
+
+spec I1/I6: connectStoreの`reconcileDeletions`オプション + 起動時kind:5整合性チェック。
+
+- [x] テスト作成（4 tests）— チャンク分割、空ID、削除適用
+- [x] `src/sync/deletion-reconcile.ts` 実装
+- [x] `src/sync/global-feed.ts` にreconcileDeletions統合
+- [x] コミット: `b427ef7`
+
+### Task 14: IndexedDB SSRフォールバック + エラーポリシー ✅
+
+spec I8/I9: SSR環境でメモリフォールバック、IDB書き込み失敗時にthrowしない。
+
+- [x] SSRフォールバックテスト（1 test）
+- [x] `src/backends/indexeddb.ts` 修正 — `typeof indexedDB === 'undefined'` チェック、put() try-catch
+- [x] コミット: `e9f7cfc`
+
+### Task 15: since-tracker.ts ✅
+
+spec I7: cache-aware since自動調整。
+
+- [x] テスト作成（3 tests）
+- [x] `src/sync/since-tracker.ts` 実装
+- [x] コミット: `f73c9c7`
+
+### Task 16: fetchById リレーfetch (tsunagiya統合テスト) ✅
+
+spec I5: fetchByIdがリレーからイベントを取得。
+
+- [x] tsunagiyaを使った統合テスト（3 tests）
+- [x] `src/core/store.ts` fetchById拡張 — fetch option、fetchFromRelay内部関数
+- [x] コミット: `2ff4716`
+
+### Task 17: query unsubscribeクリーンアップ ✅
+
+spec §4.3: unsubscribe時にQueryManagerからクエリ登録を除去（メモリリーク防止）。
+
+- [x] テスト作成（2 tests）
+- [x] `src/core/store.ts` query() — Observable wrapper with teardown
+- [x] コミット: `8cefde0`
+
+### Task 18: SyncedQuery cache-aware since統合 ✅
+
+spec §4.4: backward REQのフィルタにキャッシュ最新のcreated_atをsince設定。
+
+- [x] テスト作成（2 tests）
+- [x] `src/sync/synced-query.ts` — sinceTracker統合、startBackward非同期化
+- [x] コミット: `8a34ff6`
+
+---
+
+## 最終結果
+
+| 指標 | 値 |
+|------|------|
+| テスト数 | 113 |
+| テストファイル数 | 16 |
+| テスト結果 | 全PASS |
+| Coverage (statements) | 92% |
+| Coverage (branches) | 89% |
+| Coverage (functions) | 89% |
+| TypeScript | clean |
+| Build | clean |
+| コミット数 | 18 |
+
+## Spec Coverage (最終)
+
+| Spec セクション | タスク | 状態 |
+|---------------|--------|:---:|
+| §4.1 Store作成 | Task 5 | ✅ |
+| §4.2 connectStore | Task 6, 13 | ✅ |
+| §4.3 store.query() | Task 5, 17 | ✅ |
+| §4.3.1 store.changes$ | Task 5 | ✅ |
+| §4.4 createSyncedQuery | Task 12, 18 | ✅ |
+| §4.5 publishEvent | Task 8 | ✅ |
+| §4.6 fetchById | Task 5, 11, 16 | ✅ |
+| §5.1 store.add() ロジック | Task 5 | ✅ |
+| §5.2 削除済みイベント | Task 5, 13 | ✅ |
+| §5.3 セキュリティモデル | 設計準拠（再検証しない） | ✅ |
+| §5.4 クエリフィルタリング | Task 5 | ✅ |
+| §6.1 IndexedDB | Task 9, 14 | ✅ |
+| §6.2 メモリバックエンド | Task 4 | ✅ |
+| §7.1 マイクロバッチング | Task 5 | ✅ |
+| §8 CachedEvent型 | Task 1 | ✅ |
+| §3 since-tracker | Task 15, 18 | ✅ |
+| §3 deletion-reconcile | Task 13 | ✅ |
+| §3 negative-cache | Task 11 | ✅ |
+
+### 未カバー（v2以降）
+
 - §7.2 クエリ逆引きインデックス（v2最適化）
 - §9 v2/v3 最適化全般
-- adapters/svelte.ts
-
-### Placeholder Scan
-
-計画内にTBD/TODO/placeholderなし。全ステップにコードブロックあり。
-
-### Type Consistency
-
-- `StoredEvent` → backends/interface.ts で定義、store.ts と backends で使用
-- `CachedEvent` → types.ts で定義、store.ts の query 出力で使用
-- `AddResult` → types.ts で定義、store.ts の add() 戻り値で使用
-- `StoreChange` → types.ts で定義、store.ts の changes$ で使用
-- `NostrFilter` → types.ts で定義、全モジュールで使用
+- adapters/svelte.ts（§13未解決事項）
+- §3 Gotcha console.warn（デバッグモード、テストのみ記録）
+- §6.1 2フェーズバッチ書き込み（最適化）
+- §6.1 metadata/deleted/negative_cache ObjectStore分離（機能的に不要）
