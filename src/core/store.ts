@@ -149,7 +149,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         if (existing.event.pubkey === event.pubkey) {
           deletedIds.add(targetId);
           changeSubject.next({ event: existing.event, type: 'deleted' });
-          queryManager.notifyDeletion();
+          queryManager.notifyDeletion(existing);
         }
       } else {
         pendingDeletions.set(targetId, { pubkey: event.pubkey, registeredAt: Date.now() });
@@ -168,7 +168,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       if (existing && existing.event.created_at <= event.created_at) {
         deletedIds.add(existing.event.id);
         changeSubject.next({ event: existing.event, type: 'deleted' });
-        queryManager.notifyDeletion();
+        queryManager.notifyDeletion(existing);
       }
     }
   }
@@ -268,7 +268,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       const wasDeleted = checkPendingDeletions(event);
       if (wasDeleted) {
         changeSubject.next({ event, type: 'deleted', relay: meta?.relay });
-        queryManager.notifyDeletion();
+        queryManager.notifyDeletion(stored);
         cleanPendingDeletions();
         return 'deleted';
       }

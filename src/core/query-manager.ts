@@ -18,6 +18,11 @@ export class QueryManager {
   private deletedIds: Set<string>;
   private queryFn: ((filter: NostrFilter) => Promise<StoredEvent[]>) | null = null;
 
+  // Reverse indexes
+  private kindIndex = new Map<number, Set<number>>();
+  private authorIndex = new Map<string, Set<number>>();
+  private wildcardSet = new Set<number>();
+
   constructor(deletedIds: Set<string>) {
     this.deletedIds = deletedIds;
   }
@@ -30,6 +35,10 @@ export class QueryManager {
     const id = this.nextId++;
     const subject = new BehaviorSubject<CachedEvent[]>([]);
     this.queries.set(id, { id, filter, subject });
+
+    // Index the query
+    this.indexQuery(id, filter);
+
     this.markDirty(id);
     return { id, observable: subject.asObservable() };
   }
@@ -37,6 +46,7 @@ export class QueryManager {
   unregisterQuery(queryId: number): void {
     const query = this.queries.get(queryId);
     if (query) {
+      this.deindexQuery(queryId, query.filter);
       query.subject.complete();
       this.queries.delete(queryId);
       this.pendingDirty.delete(queryId);
@@ -44,16 +54,91 @@ export class QueryManager {
   }
 
   notifyPotentialChange(event: StoredEvent): void {
-    for (const query of this.queries.values()) {
-      if (matchesFilter(event.event, query.filter)) {
-        this.markDirty(query.id);
+    const candidates = this.getCandidateQueries(event.event.kind, event.event.pubkey);
+    for (const queryId of candidates) {
+      const query = this.queries.get(queryId);
+      if (query && matchesFilter(event.event, query.filter)) {
+        this.markDirty(queryId);
       }
     }
   }
 
-  notifyDeletion(): void {
-    for (const query of this.queries.values()) {
-      this.markDirty(query.id);
+  notifyDeletion(event: StoredEvent): void {
+    const candidates = this.getCandidateQueries(event.event.kind, event.event.pubkey);
+    for (const queryId of candidates) {
+      this.markDirty(queryId);
+    }
+  }
+
+  private getCandidateQueries(kind: number, pubkey: string): Set<number> {
+    const candidates = new Set<number>(this.wildcardSet);
+    const byKind = this.kindIndex.get(kind);
+    if (byKind) {
+      for (const id of byKind) candidates.add(id);
+    }
+    const byAuthor = this.authorIndex.get(pubkey);
+    if (byAuthor) {
+      for (const id of byAuthor) candidates.add(id);
+    }
+    return candidates;
+  }
+
+  private indexQuery(queryId: number, filter: NostrFilter): void {
+    const hasKinds = filter.kinds && filter.kinds.length > 0;
+    const hasAuthors = filter.authors && filter.authors.length > 0;
+
+    if (!hasKinds && !hasAuthors) {
+      this.wildcardSet.add(queryId);
+      return;
+    }
+
+    if (hasKinds) {
+      for (const kind of filter.kinds!) {
+        let set = this.kindIndex.get(kind);
+        if (!set) {
+          set = new Set();
+          this.kindIndex.set(kind, set);
+        }
+        set.add(queryId);
+      }
+    } else {
+      // Has authors but no kinds — wildcard for kinds
+      this.wildcardSet.add(queryId);
+    }
+
+    if (hasAuthors) {
+      for (const author of filter.authors!) {
+        let set = this.authorIndex.get(author);
+        if (!set) {
+          set = new Set();
+          this.authorIndex.set(author, set);
+        }
+        set.add(queryId);
+      }
+    }
+  }
+
+  private deindexQuery(queryId: number, filter: NostrFilter): void {
+    this.wildcardSet.delete(queryId);
+
+    if (filter.kinds) {
+      for (const kind of filter.kinds) {
+        const set = this.kindIndex.get(kind);
+        if (set) {
+          set.delete(queryId);
+          if (set.size === 0) this.kindIndex.delete(kind);
+        }
+      }
+    }
+
+    if (filter.authors) {
+      for (const author of filter.authors) {
+        const set = this.authorIndex.get(author);
+        if (set) {
+          set.delete(queryId);
+          if (set.size === 0) this.authorIndex.delete(author);
+        }
+      }
     }
   }
 
