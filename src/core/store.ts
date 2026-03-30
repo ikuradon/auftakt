@@ -45,10 +45,16 @@ export interface FetchByIdOptions {
   negativeTTL?: number;
 }
 
+export type ConnectStoreFilter = (event: NostrEvent, meta: { relay: string }) => boolean;
+
 export interface EventStore {
   add(event: NostrEvent, meta?: EventMeta): Promise<AddResult>;
   query(filter: NostrFilter): Observable<CachedEvent[]>;
   fetchById(eventId: string, options?: FetchByIdOptions): Promise<CachedEvent | null>;
+  /** @internal Used by connectStore to register its filter for mismatch detection */
+  _setConnectFilter(filter: ConnectStoreFilter | undefined): void;
+  /** @internal Used by createSyncedQuery to check for filter mismatch */
+  _getConnectFilter(): ConnectStoreFilter | undefined;
   changes$: Observable<StoreChange>;
 }
 
@@ -113,6 +119,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
   const queryManager = new QueryManager(deletedIds);
   const negativeCache: NegativeCache = createNegativeCache();
   const inflight = new Map<string, Promise<CachedEvent | null>>();
+  let connectFilter: ConnectStoreFilter | undefined;
 
   queryManager.setQueryFn(filter => backend.query(filter));
 
@@ -338,6 +345,14 @@ export function createEventStore(options: EventStoreOptions): EventStore {
     },
 
     changes$: changeSubject.asObservable(),
+
+    _setConnectFilter(filter: ConnectStoreFilter | undefined): void {
+      connectFilter = filter;
+    },
+
+    _getConnectFilter(): ConnectStoreFilter | undefined {
+      return connectFilter;
+    },
   };
 
   return store;

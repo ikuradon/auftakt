@@ -16,6 +16,11 @@ export function connectStore(
   store: EventStore,
   options?: ConnectStoreOptions,
 ): () => void {
+  // Register filter for mismatch detection
+  if (store._setConnectFilter) {
+    store._setConnectFilter(options?.filter);
+  }
+
   const subscription = rxNostr.createAllEventObservable().subscribe(packet => {
     const { event, from: relay } = packet;
     if (options?.filter && !options.filter(event, { relay })) return;
@@ -26,5 +31,10 @@ export function connectStore(
     void reconcileDeletions(rxNostr as any, store);
   }
 
-  return () => subscription.unsubscribe();
+  return () => {
+    subscription.unsubscribe();
+    if (store._setConnectFilter) {
+      store._setConnectFilter(undefined);
+    }
+  };
 }

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Subject } from 'rxjs';
 import { connectStore } from '../../src/sync/global-feed.js';
 import { createSyncedQuery } from '../../src/sync/synced-query.js';
@@ -21,8 +21,13 @@ function createMockRxNostr() {
 }
 
 describe('connectStore + SyncedQuery filter mismatch warning', () => {
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
   it('warns when SyncedQuery requests a kind excluded by connectStore filter', async () => {
-    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const store = createEventStore({ backend: memoryBackend() });
     const mock = createMockRxNostr();
 
@@ -38,9 +43,54 @@ describe('connectStore + SyncedQuery filter mismatch warning', () => {
 
     await wait();
 
-    // Currently no warn — this is documenting the gap.
-    // The spec says "デバッグモードではこの不一致を検出してconsole.warnを出力すべき"
-    // For now, this test documents the expected behavior.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('[auftakt]'),
+      expect.stringContaining('kind'),
+    );
+
+    dispose();
+    disconnect();
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when kinds are not excluded', async () => {
+    const store = createEventStore({ backend: memoryBackend() });
+    const mock = createMockRxNostr();
+
+    const disconnect = connectStore(mock as any, store, {
+      filter: (event) => event.kind !== 4,
+    });
+
+    const { dispose } = createSyncedQuery(
+      mock as any,
+      store,
+      { filter: { kinds: [1] }, strategy: 'backward' },
+    );
+
+    await wait();
+
+    expect(warnSpy).not.toHaveBeenCalled();
+
+    dispose();
+    disconnect();
+    warnSpy.mockRestore();
+  });
+
+  it('does not warn when no connectStore filter is set', async () => {
+    const store = createEventStore({ backend: memoryBackend() });
+    const mock = createMockRxNostr();
+
+    const disconnect = connectStore(mock as any, store);
+
+    const { dispose } = createSyncedQuery(
+      mock as any,
+      store,
+      { filter: { kinds: [4] }, strategy: 'backward' },
+    );
+
+    await wait();
+
+    expect(warnSpy).not.toHaveBeenCalled();
 
     dispose();
     disconnect();

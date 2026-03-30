@@ -125,8 +125,25 @@ export function createSyncedQuery(
     forwardSubscription = null;
   }
 
+  function checkFilterMismatch(filter: NostrFilter): void {
+    const connectFilter = store._getConnectFilter?.();
+    if (!connectFilter || !filter.kinds) return;
+
+    for (const kind of filter.kinds) {
+      const testEvent = { id: '', kind, pubkey: '', created_at: 0, tags: [], content: '', sig: '' };
+      if (!connectFilter(testEvent as any, { relay: '' })) {
+        console.warn(
+          '[auftakt] SyncedQuery filter mismatch:',
+          `kind ${kind} is excluded by connectStore filter. Events for this kind will not reach the store.`,
+        );
+        break;
+      }
+    }
+  }
+
   // Initialize
   let currentFilter = options.filter;
+  checkFilterMismatch(currentFilter);
   setupStoreQuery(currentFilter);
   startStrategy(currentFilter);
 
