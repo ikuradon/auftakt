@@ -67,6 +67,10 @@
     "vitepress": "^1.6.4",
     "vitest": "^4.1.2"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ikuradon/auftakt"
+  },
   "packageManager": "pnpm@10.33.0",
   "license": "MIT",
   "engines": {
