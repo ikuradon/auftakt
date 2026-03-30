@@ -5,12 +5,17 @@ import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 import type { NostrEvent } from '../../src/types.js';
 
-const flush = () => new Promise(r => setTimeout(r, 20));
+const flush = () => new Promise((r) => setTimeout(r, 20));
 
 const makePacket = (eventOverrides: Partial<NostrEvent> = {}, from = 'wss://relay1') => ({
   event: {
-    id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-    tags: [], content: 'hello', sig: 'sig1',
+    id: 'e1',
+    kind: 1,
+    pubkey: 'pk1',
+    created_at: 1000,
+    tags: [],
+    content: 'hello',
+    sig: 'sig1',
     ...eventOverrides,
   } as NostrEvent,
   from,
@@ -90,8 +95,13 @@ describe('connectStore', () => {
   it('reconcileDeletions fetches kind:5 for cached events on connect', async () => {
     const store = createEventStore({ backend: memoryBackend() });
     await store.add({
-      id: 'cached1', kind: 1, pubkey: 'pk1', created_at: 1000,
-      tags: [], content: '', sig: 'sig1',
+      id: 'cached1',
+      kind: 1,
+      pubkey: 'pk1',
+      created_at: 1000,
+      tags: [],
+      content: '',
+      sig: 'sig1',
     } as NostrEvent);
 
     const allEvents$ = new Subject<any>();
@@ -100,8 +110,13 @@ describe('connectStore', () => {
       setTimeout(() => {
         subject.next({
           event: {
-            id: 'del1', kind: 5, pubkey: 'pk1', created_at: 2000,
-            tags: [['e', 'cached1']], content: '', sig: 'sig-del',
+            id: 'del1',
+            kind: 5,
+            pubkey: 'pk1',
+            created_at: 2000,
+            tags: [['e', 'cached1']],
+            content: '',
+            sig: 'sig-del',
           },
           from: 'wss://relay1',
         });
@@ -116,11 +131,16 @@ describe('connectStore', () => {
     };
 
     connectStore(mockRxNostr as any, store, { reconcileDeletions: true });
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise((r) => setTimeout(r, 200));
 
     const result = await store.add({
-      id: 'cached1', kind: 1, pubkey: 'pk1', created_at: 1000,
-      tags: [], content: '', sig: 'sig1',
+      id: 'cached1',
+      kind: 1,
+      pubkey: 'pk1',
+      created_at: 1000,
+      tags: [],
+      content: '',
+      sig: 'sig1',
     } as NostrEvent);
     expect(result).toBe('deleted');
   });

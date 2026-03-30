@@ -45,19 +45,21 @@ function fetchDeletionsForChunk(
 
     const timer = setTimeout(finish, 10_000);
 
-    const subscription = rxNostr.use({
-      strategy: 'backward' as const,
-      rxReqId: `auftakt-reconcile-${Date.now()}`,
-      getReqPacketObservable() {
-        return reqPacketSubject.asObservable();
-      },
-    }).subscribe({
-      next: (packet: EventPacketLike) => {
-        void store.add(packet.event, { relay: packet.from });
-      },
-      complete: finish,
-      error: finish,
-    });
+    const subscription = rxNostr
+      .use({
+        strategy: 'backward' as const,
+        rxReqId: `auftakt-reconcile-${Date.now()}`,
+        getReqPacketObservable() {
+          return reqPacketSubject.asObservable();
+        },
+      })
+      .subscribe({
+        next: (packet: EventPacketLike) => {
+          void store.add(packet.event, { relay: packet.from });
+        },
+        complete: finish,
+        error: finish,
+      });
 
     reqPacketSubject.next({ filters: [{ kinds: [5], '#e': eventIds }] });
     reqPacketSubject.complete();

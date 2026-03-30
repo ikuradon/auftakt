@@ -5,7 +5,7 @@ import { createSyncedQuery } from '../../src/sync/synced-query.js';
 import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 
-const wait = (ms = 50) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
 
 function createMockRxNostr() {
   const allEvents$ = new Subject<any>();
@@ -35,11 +35,10 @@ describe('connectStore + SyncedQuery filter mismatch warning', () => {
       filter: (event) => event.kind !== 4,
     });
 
-    const { dispose } = createSyncedQuery(
-      mock as any,
-      store,
-      { filter: { kinds: [4] }, strategy: 'backward' },
-    );
+    const { dispose } = createSyncedQuery(mock as any, store, {
+      filter: { kinds: [4] },
+      strategy: 'backward',
+    });
 
     await wait();
 
@@ -61,11 +60,10 @@ describe('connectStore + SyncedQuery filter mismatch warning', () => {
       filter: (event) => event.kind !== 4,
     });
 
-    const { dispose } = createSyncedQuery(
-      mock as any,
-      store,
-      { filter: { kinds: [1] }, strategy: 'backward' },
-    );
+    const { dispose } = createSyncedQuery(mock as any, store, {
+      filter: { kinds: [1] },
+      strategy: 'backward',
+    });
 
     await wait();
 
@@ -82,11 +80,10 @@ describe('connectStore + SyncedQuery filter mismatch warning', () => {
 
     const disconnect = connectStore(mock as any, store);
 
-    const { dispose } = createSyncedQuery(
-      mock as any,
-      store,
-      { filter: { kinds: [4] }, strategy: 'backward' },
-    );
+    const { dispose } = createSyncedQuery(mock as any, store, {
+      filter: { kinds: [4] },
+      strategy: 'backward',
+    });
 
     await wait();
 

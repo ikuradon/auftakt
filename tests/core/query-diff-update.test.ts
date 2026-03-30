@@ -4,11 +4,16 @@ import { memoryBackend } from '../../src/backends/memory.js';
 import type { StorageBackend } from '../../src/backends/interface.js';
 import type { NostrEvent } from '../../src/types.js';
 
-const wait = (ms = 50) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: '', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: '',
+  sig: 'sig1',
   ...overrides,
 });
 
@@ -17,7 +22,9 @@ function countingBackend(inner: StorageBackend): StorageBackend & { queryCount: 
   let queryCount = 0;
   return {
     ...inner,
-    get queryCount() { return queryCount; },
+    get queryCount() {
+      return queryCount;
+    },
     async query(...args: Parameters<StorageBackend['query']>) {
       queryCount++;
       return inner.query(...args);
@@ -31,7 +38,7 @@ describe('differential query update', () => {
     const store = createEventStore({ backend });
 
     const collected: number[] = [];
-    const sub = store.query({ kinds: [1] }).subscribe(e => collected.push(e.length));
+    const sub = store.query({ kinds: [1] }).subscribe((e) => collected.push(e.length));
     await wait();
 
     const initialCalls = backend.queryCount;
@@ -56,10 +63,14 @@ describe('differential query update', () => {
     await wait();
     const beforeDelete = backend.queryCount;
 
-    await store.add(makeEvent({
-      id: 'del1', kind: 5, pubkey: 'pk1',
-      tags: [['e', 'target']],
-    }));
+    await store.add(
+      makeEvent({
+        id: 'del1',
+        kind: 5,
+        pubkey: 'pk1',
+        tags: [['e', 'target']],
+      }),
+    );
     await wait();
 
     expect(backend.queryCount).toBeGreaterThan(beforeDelete);
@@ -92,13 +103,13 @@ describe('differential query update', () => {
     await wait();
 
     const collected: number[] = [];
-    const sub = store.query({ kinds: [1], limit: 3 }).subscribe(e => collected.push(e.length));
+    const sub = store.query({ kinds: [1], limit: 3 }).subscribe((e) => collected.push(e.length));
     await wait();
 
     await store.add(makeEvent({ id: 'new1', kind: 1, created_at: 999 }));
     await wait();
 
-    expect(collected.every(n => n <= 3)).toBe(true);
+    expect(collected.every((n) => n <= 3)).toBe(true);
     sub.unsubscribe();
   });
 });

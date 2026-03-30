@@ -5,11 +5,16 @@ import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 import type { NostrEvent, CachedEvent } from '../../src/types.js';
 
-const wait = (ms = 30) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: '', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: '',
+  sig: 'sig1',
   ...overrides,
 });
 
@@ -25,7 +30,10 @@ describe('reconcileDeletions', () => {
         setTimeout(() => {
           subject.next({
             event: makeEvent({
-              id: 'del1', kind: 5, pubkey: 'pk1', created_at: 2000,
+              id: 'del1',
+              kind: 5,
+              pubkey: 'pk1',
+              created_at: 2000,
               tags: [['e', 'target1']],
             }),
             from: 'wss://relay1',

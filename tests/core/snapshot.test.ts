@@ -4,11 +4,16 @@ import { memoryBackend } from '../../src/backends/memory.js';
 import { saveSnapshot, loadSnapshot } from '../../src/core/snapshot.js';
 import type { NostrEvent } from '../../src/types.js';
 
-const wait = (ms = 50) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: '', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: '',
+  sig: 'sig1',
   ...overrides,
 });
 

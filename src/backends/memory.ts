@@ -61,7 +61,7 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
     if (!kindIds || kindIds.size <= budget) return;
 
     const candidates = Array.from(kindIds)
-      .filter(id => !pinnedIds.has(id))
+      .filter((id) => !pinnedIds.has(id))
       .sort((a, b) => (accessTime.get(a) ?? 0) - (accessTime.get(b) ?? 0));
 
     const toRemove = candidates.slice(0, kindIds.size - budget);
@@ -74,7 +74,7 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
     if (maxEvents === undefined || byId.size <= maxEvents) return;
 
     const candidates = Array.from(byId.keys())
-      .filter(id => !pinnedIds.has(id))
+      .filter((id) => !pinnedIds.has(id))
       .sort((a, b) => (accessTime.get(a) ?? 0) - (accessTime.get(b) ?? 0));
 
     const toRemove = candidates.slice(0, byId.size - maxEvents);
@@ -174,7 +174,11 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
       return stored;
     },
 
-    async getByAddressableKey(kind: number, pubkey: string, dTag: string): Promise<StoredEvent | null> {
+    async getByAddressableKey(
+      kind: number,
+      pubkey: string,
+      dTag: string,
+    ): Promise<StoredEvent | null> {
       const id = byAddressableKey.get(`${kind}:${pubkey}:${dTag}`);
       if (!id) return null;
       const stored = byId.get(id) ?? null;
@@ -197,9 +201,10 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
         const intersected: string[] = [];
         for (const a of filter.authors!) {
           const set = byAuthor.get(a);
-          if (set) for (const id of set) {
-            if (kindCandidates.has(id)) intersected.push(id);
-          }
+          if (set)
+            for (const id of set) {
+              if (kindCandidates.has(id)) intersected.push(id);
+            }
         }
         candidateIds = intersected;
       } else if (hasKinds) {

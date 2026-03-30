@@ -93,7 +93,7 @@ export function createSyncedQuery(
 
   function setupStoreQuery(filter: NostrFilter): void {
     querySubscription?.unsubscribe();
-    querySubscription = store.query(filter).subscribe(events => {
+    querySubscription = store.query(filter).subscribe((events) => {
       if (!disposed) {
         eventsSubject.next(events);
       }
@@ -107,12 +107,10 @@ export function createSyncedQuery(
   function startBackward(filter: NostrFilter, onComplete: () => void): void {
     releaseBackwardPool();
 
-    void sinceTracker.getSince(filter).then(latestCached => {
+    void sinceTracker.getSince(filter).then((latestCached) => {
       if (disposed) return;
 
-      const adjustedFilter = latestCached
-        ? { ...filter, since: latestCached }
-        : filter;
+      const adjustedFilter = latestCached ? { ...filter, since: latestCached } : filter;
 
       const hash = hashFilter(adjustedFilter);
       currentBackwardHash = hash;
@@ -138,10 +136,12 @@ export function createSyncedQuery(
           },
         }),
         refCount: 1,
-        completionCallbacks: [() => {
-          lastFetchedAt = Date.now();
-          onComplete();
-        }],
+        completionCallbacks: [
+          () => {
+            lastFetchedAt = Date.now();
+            onComplete();
+          },
+        ],
         completed: false,
       };
 

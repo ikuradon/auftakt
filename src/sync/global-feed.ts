@@ -24,14 +24,14 @@ export function connectStore(
     store._setConnectFilter(options?.filter);
   }
 
-  const subscription = rxNostr.createAllEventObservable().subscribe(packet => {
+  const subscription = rxNostr.createAllEventObservable().subscribe((packet) => {
     const { event, from: relay } = packet;
     if (options?.filter && !options.filter(event, { relay })) return;
     void store.add(event, { relay });
   });
 
   if (options?.reconcileDeletions && rxNostr.use) {
-    store.getAllEventIds().then(ids => {
+    store.getAllEventIds().then((ids) => {
       if (ids.length > 0) {
         void reconcileDeletions(rxNostr as Parameters<typeof reconcileDeletions>[0], store, ids);
       }

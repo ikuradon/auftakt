@@ -46,7 +46,13 @@ describe('matchesFilter', () => {
   });
 
   it('matches by tag filters (#e, #p, #t)', () => {
-    const event = makeEvent({ tags: [['e', 'ref1'], ['p', 'pk2'], ['t', 'nostr']] });
+    const event = makeEvent({
+      tags: [
+        ['e', 'ref1'],
+        ['p', 'pk2'],
+        ['t', 'nostr'],
+      ],
+    });
     expect(matchesFilter(event, { '#e': ['ref1'] })).toBe(true);
     expect(matchesFilter(event, { '#p': ['pk2'] })).toBe(true);
     expect(matchesFilter(event, { '#t': ['nostr'] })).toBe(true);
@@ -64,14 +70,18 @@ describe('matchesFilter', () => {
   });
 
   it('matches ids by prefix (NIP-01)', () => {
-    const event = makeEvent({ id: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' });
+    const event = makeEvent({
+      id: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    });
     expect(matchesFilter(event, { ids: ['abcdef'] })).toBe(true);
     expect(matchesFilter(event, { ids: ['abcdef1234567890'] })).toBe(true);
     expect(matchesFilter(event, { ids: ['xxxxxx'] })).toBe(false);
   });
 
   it('matches authors by prefix (NIP-01)', () => {
-    const event = makeEvent({ pubkey: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' });
+    const event = makeEvent({
+      pubkey: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    });
     expect(matchesFilter(event, { authors: ['abcdef'] })).toBe(true);
     expect(matchesFilter(event, { authors: ['xyz'] })).toBe(false);
   });

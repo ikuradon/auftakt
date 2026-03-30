@@ -11,7 +11,7 @@ export function classifyEvent(event: NostrEvent): EventClassification {
 }
 
 export function isExpired(event: NostrEvent, now?: number): boolean {
-  const expirationTag = event.tags.find(t => t[0] === 'expiration');
+  const expirationTag = event.tags.find((t) => t[0] === 'expiration');
   if (!expirationTag || !expirationTag[1]) return false;
   const expiresAt = parseInt(expirationTag[1], 10);
   if (isNaN(expiresAt)) return false;
@@ -19,7 +19,7 @@ export function isExpired(event: NostrEvent, now?: number): boolean {
 }
 
 export function getDTag(event: NostrEvent): string {
-  const dTag = event.tags.find(t => t[0] === 'd');
+  const dTag = event.tags.find((t) => t[0] === 'd');
   return dTag?.[1] ?? '';
 }
 
@@ -36,10 +36,7 @@ export function getAddressableKey(event: NostrEvent): string {
  * Returns > 0 if incoming wins, < 0 if existing wins, 0 if identical.
  * Rule: higher created_at wins. Tiebreaker: lower id (lexicographic) wins.
  */
-export function compareEventsForReplacement(
-  incoming: NostrEvent,
-  existing: NostrEvent,
-): number {
+export function compareEventsForReplacement(incoming: NostrEvent, existing: NostrEvent): number {
   if (incoming.created_at !== existing.created_at) {
     return incoming.created_at - existing.created_at;
   }

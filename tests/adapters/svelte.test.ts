@@ -15,11 +15,16 @@ import { connectStore } from '../../src/sync/global-feed.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 import type { NostrEvent, CachedEvent } from '../../src/types.js';
 
-const wait = (ms = 50) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 50) => new Promise((r) => setTimeout(r, ms));
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: '', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: '',
+  sig: 'sig1',
   ...overrides,
 });
 
@@ -54,12 +59,12 @@ describe('toReadable', () => {
     const readable = toReadable(observable);
 
     const values: CachedEvent[][] = [];
-    const unsubscribe = readable.subscribe(v => values.push(v));
+    const unsubscribe = readable.subscribe((v) => values.push(v));
 
     await wait();
     expect(values.length).toBeGreaterThan(0);
     // At some point should have 1 event
-    expect(values.some(v => v.length === 1)).toBe(true);
+    expect(values.some((v) => v.length === 1)).toBe(true);
 
     unsubscribe();
   });
@@ -70,7 +75,7 @@ describe('toReadable', () => {
     const readable = toReadable(observable);
 
     const values: CachedEvent[][] = [];
-    const unsubscribe = readable.subscribe(v => values.push(v));
+    const unsubscribe = readable.subscribe((v) => values.push(v));
     await wait();
 
     const countBefore = values.length;
@@ -114,10 +119,10 @@ describe('createSvelteQuery', () => {
     });
 
     const collected: CachedEvent[][] = [];
-    const unsub = events.subscribe(v => collected.push(v));
+    const unsub = events.subscribe((v) => collected.push(v));
     await wait();
 
-    expect(collected.some(v => v.length > 0)).toBe(true);
+    expect(collected.some((v) => v.length > 0)).toBe(true);
     unsub();
     dispose();
   });
@@ -129,7 +134,7 @@ describe('createSvelteQuery', () => {
     });
 
     const statuses: string[] = [];
-    const unsub = status.subscribe(v => statuses.push(v));
+    const unsub = status.subscribe((v) => statuses.push(v));
     await wait();
 
     expect(statuses.length).toBeGreaterThan(0);

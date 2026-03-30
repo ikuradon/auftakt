@@ -1,5 +1,4 @@
-import { Subject, Observable, BehaviorSubject, firstValueFrom, race, timer, EMPTY } from 'rxjs';
-import { take, map, filter as rxFilter, catchError } from 'rxjs/operators';
+import { Subject, Observable, BehaviorSubject } from 'rxjs';
 import type {
   NostrEvent,
   CachedEvent,
@@ -9,12 +8,7 @@ import type {
   NostrFilter,
 } from '../types.js';
 import type { StorageBackend, StoredEvent } from '../backends/interface.js';
-import {
-  classifyEvent,
-  isExpired,
-  getDTag,
-  compareEventsForReplacement,
-} from './nip-rules.js';
+import { classifyEvent, isExpired, getDTag, compareEventsForReplacement } from './nip-rules.js';
 import { QueryManager } from './query-manager.js';
 import { createNegativeCache, type NegativeCache } from './negative-cache.js';
 
@@ -41,7 +35,9 @@ export interface FetchByIdOptions {
    */
   fetch?: (eventId: string) => Promise<{ event: NostrEvent; relay: string } | null>;
   /** @deprecated Use `fetch` instead. Kept for convenience — internally creates a oneshot REQ. */
-  rxNostr?: { use(req: unknown, options?: unknown): Observable<{ event: NostrEvent; from: string }> };
+  rxNostr?: {
+    use(req: unknown, options?: unknown): Observable<{ event: NostrEvent; from: string }>;
+  };
   relayHint?: string;
   timeout?: number;
   negativeTTL?: number;
@@ -67,7 +63,9 @@ export interface EventStore {
 }
 
 function fetchFromRelay(
-  rxNostr: { use(req: unknown, options?: unknown): Observable<{ event: NostrEvent; from: string }> },
+  rxNostr: {
+    use(req: unknown, options?: unknown): Observable<{ event: NostrEvent; from: string }>;
+  },
   eventId: string,
   timeout: number,
   relayHint?: string,
@@ -78,33 +76,38 @@ function fetchFromRelay(
 
     const useOptions = relayHint ? { on: { relays: [relayHint] } } : undefined;
 
-    const subscription = rxNostr.use({
-      strategy: 'backward' as const,
-      rxReqId: `auftakt-fetch-${eventId}-${Date.now()}`,
-      getReqPacketObservable() {
-        return reqPacketSubject.asObservable();
-      },
-    }, useOptions).subscribe({
-      next: (packet: any) => {
-        if (!resolved && packet.event?.id === eventId) {
-          resolved = true;
-          subscription.unsubscribe();
-          resolve({ event: packet.event, relay: packet.from });
-        }
-      },
-      complete: () => {
-        if (!resolved) {
-          resolved = true;
-          resolve(null);
-        }
-      },
-      error: () => {
-        if (!resolved) {
-          resolved = true;
-          resolve(null);
-        }
-      },
-    });
+    const subscription = rxNostr
+      .use(
+        {
+          strategy: 'backward' as const,
+          rxReqId: `auftakt-fetch-${eventId}-${Date.now()}`,
+          getReqPacketObservable() {
+            return reqPacketSubject.asObservable();
+          },
+        },
+        useOptions,
+      )
+      .subscribe({
+        next: (packet: any) => {
+          if (!resolved && packet.event?.id === eventId) {
+            resolved = true;
+            subscription.unsubscribe();
+            resolve({ event: packet.event, relay: packet.from });
+          }
+        },
+        complete: () => {
+          if (!resolved) {
+            resolved = true;
+            resolve(null);
+          }
+        },
+        error: () => {
+          if (!resolved) {
+            resolved = true;
+            resolve(null);
+          }
+        },
+      });
 
     reqPacketSubject.next({ filters: [{ ids: [eventId] }] });
     reqPacketSubject.complete();
@@ -142,15 +145,15 @@ export function createEventStore(options: EventStoreOptions): EventStore {
     return true;
   }
 
-  queryManager.setQueryFn(filter => backend.query(filter));
+  queryManager.setQueryFn((filter) => backend.query(filter));
 
   const indexedTags = options.indexedTags;
 
   function buildStoredEvent(event: NostrEvent, meta?: EventMeta): StoredEvent {
     const tagIndex = event.tags
-      .filter(t => t.length >= 2 && t[0].length === 1)
-      .filter(t => !indexedTags || indexedTags.includes(t[0]))
-      .map(t => `${t[0]}:${t[1]}`);
+      .filter((t) => t.length >= 2 && t[0].length === 1)
+      .filter((t) => !indexedTags || indexedTags.includes(t[0]))
+      .map((t) => `${t[0]}:${t[1]}`);
     return {
       event,
       seenOn: meta?.relay ? [meta.relay] : [],
@@ -161,9 +164,9 @@ export function createEventStore(options: EventStoreOptions): EventStore {
   }
 
   async function processKind5(event: NostrEvent): Promise<void> {
-    const eTargets = event.tags.filter(t => t[0] === 'e').map(t => t[1]);
+    const eTargets = event.tags.filter((t) => t[0] === 'e').map((t) => t[1]);
     const existingEvents = await Promise.all(
-      eTargets.map(id => backend.get(id).then(e => [id, e] as const))
+      eTargets.map((id) => backend.get(id).then((e) => [id, e] as const)),
     );
     for (const [targetId, existing] of existingEvents) {
       if (existing) {
@@ -177,7 +180,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       }
     }
 
-    const aTargets = event.tags.filter(t => t[0] === 'a').map(t => t[1]);
+    const aTargets = event.tags.filter((t) => t[0] === 'a').map((t) => t[1]);
     for (const aValue of aTargets) {
       const parts = aValue.split(':');
       if (parts.length < 3) continue;
@@ -222,8 +225,9 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       if (entry.registeredAt < threshold) pendingDeletions.delete(id);
     }
     if (pendingDeletions.size > 10000) {
-      const entries = Array.from(pendingDeletions.entries())
-        .sort((a, b) => a[1].registeredAt - b[1].registeredAt);
+      const entries = Array.from(pendingDeletions.entries()).sort(
+        (a, b) => a[1].registeredAt - b[1].registeredAt,
+      );
       const toRemove = entries.slice(0, entries.length - 10000);
       for (const [id] of toRemove) pendingDeletions.delete(id);
     }
@@ -318,7 +322,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
     query(filter: NostrFilter): Observable<CachedEvent[]> {
       const { id, observable } = queryManager.registerQuery(filter);
-      return new Observable<CachedEvent[]>(subscriber => {
+      return new Observable<CachedEvent[]>((subscriber) => {
         const sub = observable.subscribe(subscriber);
         return () => {
           sub.unsubscribe();
@@ -347,9 +351,11 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         if (negativeCache.has(eventId)) return null;
 
         // Step 3: Fetch from relay
-        const fetchFn = options?.fetch
-          ?? (options?.rxNostr
-            ? (id: string) => fetchFromRelay(options.rxNostr!, id, options.timeout ?? 5000, options.relayHint)
+        const fetchFn =
+          options?.fetch ??
+          (options?.rxNostr
+            ? (id: string) =>
+                fetchFromRelay(options.rxNostr!, id, options.timeout ?? 5000, options.relayHint)
             : null);
 
         if (fetchFn) {
@@ -389,11 +395,11 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       const results = await backend.query(filter);
       const now = Math.floor(Date.now() / 1000);
       return results
-        .filter(s => !deletedIds.has(s.event.id))
-        .filter(s => !isExpired(s.event, now))
+        .filter((s) => !deletedIds.has(s.event.id))
+        .filter((s) => !isExpired(s.event, now))
         .sort((a, b) => b.event.created_at - a.event.created_at)
         .slice(0, filter.limit ?? Infinity)
-        .map(s => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
+        .map((s) => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
     },
 
     dispose(): void {

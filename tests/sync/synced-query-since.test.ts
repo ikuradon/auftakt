@@ -6,11 +6,16 @@ import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 import type { NostrEvent } from '../../src/types.js';
 
-const wait = (ms = 30) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: '', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: '',
+  sig: 'sig1',
   ...overrides,
 });
 
@@ -51,17 +56,16 @@ describe('SyncedQuery cache-aware since', () => {
     await store.add(makeEvent({ id: 'b', kind: 1, created_at: 1000 }));
     await wait();
 
-    const { dispose } = createSyncedQuery(
-      mockRxNostr as any,
-      store,
-      { filter: { kinds: [1] }, strategy: 'backward' },
-    );
+    const { dispose } = createSyncedQuery(mockRxNostr as any, store, {
+      filter: { kinds: [1] },
+      strategy: 'backward',
+    });
 
     await wait(50);
 
     // The backward REQ should include since: 1000 (latest cached created_at)
     const backwardFilter = mockRxNostr.useCallFilters.find(
-      (f: any) => f.kinds?.includes(1) && f.since !== undefined
+      (f: any) => f.kinds?.includes(1) && f.since !== undefined,
     );
     expect(backwardFilter).toBeDefined();
     expect(backwardFilter.since).toBe(1000);
@@ -74,18 +78,15 @@ describe('SyncedQuery cache-aware since', () => {
     const mockRxNostr = createMockRxNostr();
     connectStore(mockRxNostr as any, store);
 
-    const { dispose } = createSyncedQuery(
-      mockRxNostr as any,
-      store,
-      { filter: { kinds: [1] }, strategy: 'backward' },
-    );
+    const { dispose } = createSyncedQuery(mockRxNostr as any, store, {
+      filter: { kinds: [1] },
+      strategy: 'backward',
+    });
 
     await wait(50);
 
     // Should still send REQ but without since
-    const filters = mockRxNostr.useCallFilters.filter(
-      (f: any) => f.kinds?.includes(1)
-    );
+    const filters = mockRxNostr.useCallFilters.filter((f: any) => f.kinds?.includes(1));
     expect(filters.length).toBeGreaterThan(0);
     // When no cache, since should be absent
     const hasSince = filters.some((f: any) => f.since !== undefined);

@@ -13,12 +13,14 @@ const baseEvent: NostrEvent = {
   sig: 'sig1',
 };
 
-const makeStored = (overrides: {
-  event?: Partial<NostrEvent>;
-  seenOn?: string[];
-  _tag_index?: string[];
-  _d_tag?: string;
-} = {}): StoredEvent => ({
+const makeStored = (
+  overrides: {
+    event?: Partial<NostrEvent>;
+    seenOn?: string[];
+    _tag_index?: string[];
+    _d_tag?: string;
+  } = {},
+): StoredEvent => ({
   event: { ...baseEvent, ...overrides.event } as NostrEvent,
   seenOn: overrides.seenOn ?? ['wss://relay1'],
   firstSeen: Date.now(),
@@ -76,8 +78,12 @@ describe('memoryBackend', () => {
   });
 
   it('queries by tag index', async () => {
-    await backend.put(makeStored({ event: { id: 'a', tags: [['e', 'ref1']] }, _tag_index: ['e:ref1'] }));
-    await backend.put(makeStored({ event: { id: 'b', tags: [['e', 'ref2']] }, _tag_index: ['e:ref2'] }));
+    await backend.put(
+      makeStored({ event: { id: 'a', tags: [['e', 'ref1']] }, _tag_index: ['e:ref1'] }),
+    );
+    await backend.put(
+      makeStored({ event: { id: 'b', tags: [['e', 'ref2']] }, _tag_index: ['e:ref2'] }),
+    );
     const results = await backend.query({ '#e': ['ref1'] });
     expect(results).toHaveLength(1);
     expect(results[0].event.id).toBe('a');
@@ -99,7 +105,9 @@ describe('memoryBackend', () => {
   });
 
   it('getByAddressableKey returns matching event', async () => {
-    await backend.put(makeStored({ event: { id: 'addr1', kind: 30023, pubkey: 'pk1' }, _d_tag: 'hello' }));
+    await backend.put(
+      makeStored({ event: { id: 'addr1', kind: 30023, pubkey: 'pk1' }, _d_tag: 'hello' }),
+    );
     const result = await backend.getByAddressableKey(30023, 'pk1', 'hello');
     expect(result?.event.id).toBe('addr1');
   });

@@ -19,15 +19,12 @@ export interface SaveSnapshotOptions extends SnapshotOptions {
  * Save a snapshot of store events to localStorage (synchronous storage).
  * Use to speed up initial paint on next page load.
  */
-export async function saveSnapshot(
-  store: EventStore,
-  options: SaveSnapshotOptions,
-): Promise<void> {
+export async function saveSnapshot(store: EventStore, options: SaveSnapshotOptions): Promise<void> {
   const storage = options.storage ?? globalThis.localStorage;
   if (!storage) return;
 
   const events = await store.getSync(options.filter);
-  const serialized = JSON.stringify(events.map(e => e.event));
+  const serialized = JSON.stringify(events.map((e) => e.event));
 
   try {
     storage.setItem(options.key, serialized);
@@ -40,10 +37,7 @@ export async function saveSnapshot(
  * Load a snapshot from localStorage into the store.
  * Returns the number of events loaded.
  */
-export async function loadSnapshot(
-  store: EventStore,
-  options: SnapshotOptions,
-): Promise<number> {
+export async function loadSnapshot(store: EventStore, options: SnapshotOptions): Promise<number> {
   const storage = options.storage ?? globalThis.localStorage;
   if (!storage) return 0;
 

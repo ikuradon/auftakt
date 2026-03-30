@@ -205,23 +205,25 @@ export class QueryManager {
 
       if (fullRefresh.has(queryId)) {
         // Full backend query
-        this.queryFn(query.filter).then(results => {
-          if (!this.queries.has(queryId)) return;
-          const output = this.toOutput(results);
-          query.cachedResults = output;
-          query.subject.next(output);
-        }).catch(err => {
-          console.warn('[auftakt] Query refresh failed:', err);
-        });
+        this.queryFn(query.filter)
+          .then((results) => {
+            if (!this.queries.has(queryId)) return;
+            const output = this.toOutput(results);
+            query.cachedResults = output;
+            query.subject.next(output);
+          })
+          .catch((err) => {
+            console.warn('[auftakt] Query refresh failed:', err);
+          });
       } else {
         // Differential: insert added events into cached results
         const events = addedEvents.get(queryId);
         if (events && events.length > 0) {
           const now = Math.floor(Date.now() / 1000);
           const newItems: CachedEvent[] = events
-            .filter(s => !this.deletedIds.has(s.event.id))
-            .filter(s => !isExpired(s.event, now))
-            .map(s => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
+            .filter((s) => !this.deletedIds.has(s.event.id))
+            .filter((s) => !isExpired(s.event, now))
+            .map((s) => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
 
           let merged = [...query.cachedResults, ...newItems];
           merged.sort((a, b) => b.event.created_at - a.event.created_at);
@@ -242,10 +244,10 @@ export class QueryManager {
   private toOutput(results: StoredEvent[]): CachedEvent[] {
     const now = Math.floor(Date.now() / 1000);
     return results
-      .filter(s => !this.deletedIds.has(s.event.id))
-      .filter(s => !isExpired(s.event, now))
+      .filter((s) => !this.deletedIds.has(s.event.id))
+      .filter((s) => !isExpired(s.event, now))
       .sort((a, b) => b.event.created_at - a.event.created_at)
-      .map(s => ({
+      .map((s) => ({
         event: s.event,
         seenOn: s.seenOn,
         firstSeen: s.firstSeen,

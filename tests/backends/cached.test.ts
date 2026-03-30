@@ -6,7 +6,15 @@ import type { StorageBackend, StoredEvent } from '../../src/backends/interface.j
 import type { NostrEvent } from '../../src/types.js';
 
 const makeStored = (id: string, kind = 1): StoredEvent => ({
-  event: { id, kind, pubkey: 'pk1', created_at: 1000, tags: [], content: '', sig: 's' } as NostrEvent,
+  event: {
+    id,
+    kind,
+    pubkey: 'pk1',
+    created_at: 1000,
+    tags: [],
+    content: '',
+    sig: 's',
+  } as NostrEvent,
   seenOn: ['wss://r1'],
   firstSeen: Date.now(),
   _tag_index: [],
@@ -19,8 +27,12 @@ function countingBackend(inner: StorageBackend) {
   let queryCalls = 0;
   return {
     ...inner,
-    get getCalls() { return getCalls; },
-    get queryCalls() { return queryCalls; },
+    get getCalls() {
+      return getCalls;
+    },
+    get queryCalls() {
+      return queryCalls;
+    },
     async get(...args: Parameters<StorageBackend['get']>) {
       getCalls++;
       return inner.get(...args);

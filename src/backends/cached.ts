@@ -21,10 +21,7 @@ export function cachedBackend(
 
   return {
     async put(stored: StoredEvent): Promise<void> {
-      await Promise.all([
-        cache.put(stored),
-        inner.put(stored),
-      ]);
+      await Promise.all([cache.put(stored), inner.put(stored)]);
     },
 
     async get(eventId: string): Promise<StoredEvent | null> {
@@ -51,7 +48,11 @@ export function cachedBackend(
       return fromInner;
     },
 
-    async getByAddressableKey(kind: number, pubkey: string, dTag: string): Promise<StoredEvent | null> {
+    async getByAddressableKey(
+      kind: number,
+      pubkey: string,
+      dTag: string,
+    ): Promise<StoredEvent | null> {
       const cached = await cache.getByAddressableKey(kind, pubkey, dTag);
       if (cached) return cached;
 
@@ -75,10 +76,7 @@ export function cachedBackend(
     },
 
     async delete(eventId: string): Promise<void> {
-      await Promise.all([
-        cache.delete(eventId),
-        inner.delete(eventId),
-      ]);
+      await Promise.all([cache.delete(eventId), inner.delete(eventId)]);
     },
 
     async getAllEventIds(): Promise<string[]> {
@@ -86,10 +84,7 @@ export function cachedBackend(
     },
 
     async clear(): Promise<void> {
-      await Promise.all([
-        cache.clear(),
-        inner.clear(),
-      ]);
+      await Promise.all([cache.clear(), inner.clear()]);
     },
   };
 }

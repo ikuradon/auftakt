@@ -4,8 +4,13 @@ import { memoryBackend } from '../../src/backends/memory.js';
 import type { NostrEvent } from '../../src/types.js';
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: '', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: '',
+  sig: 'sig1',
   ...overrides,
 });
 
@@ -16,7 +21,9 @@ describe('store.dispose()', () => {
 
     let completed = false;
     const sub = store.query({ kinds: [1] }).subscribe({
-      complete: () => { completed = true; },
+      complete: () => {
+        completed = true;
+      },
     });
 
     store.dispose();
@@ -29,7 +36,9 @@ describe('store.dispose()', () => {
 
     let completed = false;
     const sub = store.changes$.subscribe({
-      complete: () => { completed = true; },
+      complete: () => {
+        completed = true;
+      },
     });
 
     store.dispose();
@@ -42,10 +51,14 @@ describe('store.dispose()', () => {
 
     let count = 0;
     const sub1 = store.query({ kinds: [1] }).subscribe({
-      complete: () => { count++; },
+      complete: () => {
+        count++;
+      },
     });
     const sub2 = store.query({ kinds: [7] }).subscribe({
-      complete: () => { count++; },
+      complete: () => {
+        count++;
+      },
     });
 
     store.dispose();

@@ -40,7 +40,10 @@ export interface IndexedDBBackendOptions {
   batchWrites?: boolean;
 }
 
-export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptions): StorageBackend {
+export function indexedDBBackend(
+  dbName: string,
+  options?: IndexedDBBackendOptions,
+): StorageBackend {
   // SSR fallback: when indexedDB is not available, use memory backend
   if (typeof indexedDB === 'undefined') {
     return memoryBackendFallback();
@@ -124,7 +127,11 @@ export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptio
       return result ?? null;
     },
 
-    async getByAddressableKey(kind: number, pubkey: string, dTag: string): Promise<StoredEvent | null> {
+    async getByAddressableKey(
+      kind: number,
+      pubkey: string,
+      dTag: string,
+    ): Promise<StoredEvent | null> {
       const db = await getDB();
       const tx = db.transaction('events', 'readonly');
       const index = tx.objectStore('events').index('replace_key');
@@ -140,7 +147,7 @@ export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptio
       let rawResults: StoredEvent[];
 
       // Optimize: tag query via multiEntry index
-      const tagKeys = Object.keys(filter).filter(k => k.startsWith('#'));
+      const tagKeys = Object.keys(filter).filter((k) => k.startsWith('#'));
       if (tagKeys.length > 0) {
         const tagName = tagKeys[0].slice(1);
         const values = filter[tagKeys[0] as `#${string}`] ?? [];
@@ -152,7 +159,7 @@ export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptio
             allResults.push(...partial);
           }
           const seen = new Set<string>();
-          rawResults = allResults.filter(s => {
+          rawResults = allResults.filter((s) => {
             if (seen.has(s.event.id)) return false;
             seen.add(s.event.id);
             return true;
@@ -170,7 +177,7 @@ export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptio
         rawResults = await idbRequest(store.getAll());
       }
 
-      let results = rawResults.filter(s => matchesFilter(s.event, filter));
+      let results = rawResults.filter((s) => matchesFilter(s.event, filter));
       results.sort((a, b) => b.event.created_at - a.event.created_at);
       if (filter.limit && filter.limit > 0) {
         results = results.slice(0, filter.limit);
@@ -211,7 +218,11 @@ export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptio
       try {
         const db = await getDB();
         const tx = db.transaction('deleted', 'readwrite');
-        tx.objectStore('deleted').put({ eventId, deletedBy: deletionEventId, deletedAt: Date.now() });
+        tx.objectStore('deleted').put({
+          eventId,
+          deletedBy: deletionEventId,
+          deletedAt: Date.now(),
+        });
         await new Promise<void>((resolve, reject) => {
           tx.oncomplete = () => resolve();
           tx.onerror = () => reject(tx.error);

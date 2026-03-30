@@ -4,8 +4,13 @@ import { memoryBackend } from '../../src/backends/memory.js';
 import type { NostrEvent } from '../../src/types.js';
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: '', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: '',
+  sig: 'sig1',
   ...overrides,
 });
 
@@ -20,9 +25,15 @@ describe('deletedIds size limit', () => {
     }
 
     const eTags = Array.from({ length: targetCount }, (_, i) => ['e', `target-${i}`]);
-    await store.add(makeEvent({
-      id: 'del1', kind: 5, pubkey: 'pk1', created_at: 9999, tags: eTags,
-    }));
+    await store.add(
+      makeEvent({
+        id: 'del1',
+        kind: 5,
+        pubkey: 'pk1',
+        created_at: 9999,
+        tags: eTags,
+      }),
+    );
 
     // First deleted target should be marked as deleted
     const result0 = await store.add(makeEvent({ id: 'target-0', pubkey: 'pk1' }));

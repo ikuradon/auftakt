@@ -5,7 +5,7 @@ import { connectStore } from '../../src/sync/global-feed.js';
 import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 
-const wait = (ms = 80) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 80) => new Promise((r) => setTimeout(r, ms));
 
 function createMockRxNostr() {
   const allEvents$ = new Subject<any>();

@@ -4,7 +4,15 @@ import type { StorageBackend, StoredEvent } from '../../src/backends/interface.j
 import type { NostrEvent } from '../../src/types.js';
 
 const makeStored = (id: string, kind = 1, overrides: Partial<StoredEvent> = {}): StoredEvent => ({
-  event: { id, kind, pubkey: 'pk1', created_at: 1000, tags: [], content: '', sig: 's' } as NostrEvent,
+  event: {
+    id,
+    kind,
+    pubkey: 'pk1',
+    created_at: 1000,
+    tags: [],
+    content: '',
+    sig: 's',
+  } as NostrEvent,
   seenOn: [],
   firstSeen: Date.now(),
   _tag_index: [],
@@ -86,7 +94,7 @@ describe('memoryBackend LRU eviction', () => {
       await backend.put(makeStored('r2', 7)); // exceeds kind:7 budget of 2
 
       const ids = await backend.getAllEventIds();
-      const kind7 = ids.filter(id => id.startsWith('r'));
+      const kind7 = ids.filter((id) => id.startsWith('r'));
       expect(kind7).toHaveLength(2);
       expect(ids).not.toContain('r0'); // oldest kind:7
     });
@@ -105,7 +113,7 @@ describe('memoryBackend LRU eviction', () => {
       await backend.put(makeStored('e2', 42)); // exceeds default budget
 
       const ids = await backend.getAllEventIds();
-      const kind42 = ids.filter(id => id.startsWith('e'));
+      const kind42 = ids.filter((id) => id.startsWith('e'));
       expect(kind42).toHaveLength(2);
     });
 
@@ -124,7 +132,7 @@ describe('memoryBackend LRU eviction', () => {
       await backend.put(makeStored('p2', 0)); // exceeds overridden budget of 2
 
       const ids = await backend.getAllEventIds();
-      const kind0 = ids.filter(id => id.startsWith('p'));
+      const kind0 = ids.filter((id) => id.startsWith('p'));
       expect(kind0).toHaveLength(2);
     });
   });

@@ -7,7 +7,15 @@ import type { NostrEvent } from '../../src/types.js';
 let dbCounter = 0;
 
 const makeStored = (id: string, kind = 1): StoredEvent => ({
-  event: { id, kind, pubkey: 'pk1', created_at: 1000, tags: [], content: '', sig: 's' } as NostrEvent,
+  event: {
+    id,
+    kind,
+    pubkey: 'pk1',
+    created_at: 1000,
+    tags: [],
+    content: '',
+    sig: 's',
+  } as NostrEvent,
   seenOn: [],
   firstSeen: Date.now(),
   _tag_index: [],
@@ -49,7 +57,7 @@ describe('indexedDB batch writes', () => {
     backend.put(makeStored('c'));
 
     // Wait for batch flush
-    await new Promise(r => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 50));
 
     const a = await backend.get('a');
     const b = await backend.get('b');

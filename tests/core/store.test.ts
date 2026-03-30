@@ -16,7 +16,7 @@ const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
 });
 
 /** Wait for reactive query to flush (microtask + async backend query) */
-const flush = () => new Promise(r => setTimeout(r, 20));
+const flush = () => new Promise((r) => setTimeout(r, 20));
 
 describe('NostrEventStore', () => {
   let store: ReturnType<typeof createEventStore>;
@@ -58,44 +58,68 @@ describe('NostrEventStore', () => {
 
     it('replaces older replaceable event', async () => {
       await store.add(makeEvent({ id: 'old', kind: 0, pubkey: 'pk1', created_at: 1000 }));
-      const result = await store.add(makeEvent({ id: 'new', kind: 0, pubkey: 'pk1', created_at: 2000 }));
+      const result = await store.add(
+        makeEvent({ id: 'new', kind: 0, pubkey: 'pk1', created_at: 2000 }),
+      );
       expect(result).toBe('replaced');
       await flush();
-      const events = await firstValueFrom(store.query({ kinds: [0], authors: ['pk1'] }).pipe(skip(1)));
+      const events = await firstValueFrom(
+        store.query({ kinds: [0], authors: ['pk1'] }).pipe(skip(1)),
+      );
       expect(events).toHaveLength(1);
       expect(events[0].event.id).toBe('new');
     });
 
     it('discards older incoming replaceable event', async () => {
       await store.add(makeEvent({ id: 'new', kind: 0, pubkey: 'pk1', created_at: 2000 }));
-      const result = await store.add(makeEvent({ id: 'old', kind: 0, pubkey: 'pk1', created_at: 1000 }));
+      const result = await store.add(
+        makeEvent({ id: 'old', kind: 0, pubkey: 'pk1', created_at: 1000 }),
+      );
       expect(result).toBe('duplicate');
     });
 
     it('handles addressable events with d-tag', async () => {
-      await store.add(makeEvent({
-        id: 'old', kind: 30023, pubkey: 'pk1', created_at: 1000,
-        tags: [['d', 'hello']],
-      }));
-      const result = await store.add(makeEvent({
-        id: 'new', kind: 30023, pubkey: 'pk1', created_at: 2000,
-        tags: [['d', 'hello']],
-      }));
+      await store.add(
+        makeEvent({
+          id: 'old',
+          kind: 30023,
+          pubkey: 'pk1',
+          created_at: 1000,
+          tags: [['d', 'hello']],
+        }),
+      );
+      const result = await store.add(
+        makeEvent({
+          id: 'new',
+          kind: 30023,
+          pubkey: 'pk1',
+          created_at: 2000,
+          tags: [['d', 'hello']],
+        }),
+      );
       expect(result).toBe('replaced');
     });
 
     it('handles addressable events with empty d-tag fallback', async () => {
-      await store.add(makeEvent({ id: 'a', kind: 30023, pubkey: 'pk1', created_at: 1000, tags: [] }));
-      const result = await store.add(makeEvent({ id: 'b', kind: 30023, pubkey: 'pk1', created_at: 2000, tags: [] }));
+      await store.add(
+        makeEvent({ id: 'a', kind: 30023, pubkey: 'pk1', created_at: 1000, tags: [] }),
+      );
+      const result = await store.add(
+        makeEvent({ id: 'b', kind: 30023, pubkey: 'pk1', created_at: 2000, tags: [] }),
+      );
       expect(result).toBe('replaced');
     });
 
     it('rejects already-deleted event via step 1.5 deletedIds check', async () => {
       await store.add(makeEvent({ id: 'target', kind: 1, pubkey: 'pk1' }));
-      await store.add(makeEvent({
-        id: 'del1', kind: 5, pubkey: 'pk1',
-        tags: [['e', 'target']],
-      }));
+      await store.add(
+        makeEvent({
+          id: 'del1',
+          kind: 5,
+          pubkey: 'pk1',
+          tags: [['e', 'target']],
+        }),
+      );
       const result = await store.add(makeEvent({ id: 'target', kind: 1, pubkey: 'pk1' }));
       expect(result).toBe('deleted');
     });
@@ -104,10 +128,14 @@ describe('NostrEventStore', () => {
   describe('kind:5 deletion', () => {
     it('marks referenced event as deleted', async () => {
       await store.add(makeEvent({ id: 'target', kind: 1, pubkey: 'pk1' }));
-      await store.add(makeEvent({
-        id: 'del1', kind: 5, pubkey: 'pk1',
-        tags: [['e', 'target']],
-      }));
+      await store.add(
+        makeEvent({
+          id: 'del1',
+          kind: 5,
+          pubkey: 'pk1',
+          tags: [['e', 'target']],
+        }),
+      );
       await flush();
       const events = await firstValueFrom(store.query({ ids: ['target'] }).pipe(skip(1)));
       expect(events).toHaveLength(0);
@@ -115,20 +143,29 @@ describe('NostrEventStore', () => {
 
     it('rejects deletion from different pubkey', async () => {
       await store.add(makeEvent({ id: 'target', kind: 1, pubkey: 'pk1' }));
-      await store.add(makeEvent({
-        id: 'del1', kind: 5, pubkey: 'pk2',
-        tags: [['e', 'target']],
-      }));
+      await store.add(
+        makeEvent({
+          id: 'del1',
+          kind: 5,
+          pubkey: 'pk2',
+          tags: [['e', 'target']],
+        }),
+      );
       await flush();
       const events = await firstValueFrom(store.query({ ids: ['target'] }).pipe(skip(1)));
       expect(events).toHaveLength(1);
     });
 
     it('handles pendingDeletions when target arrives later', async () => {
-      await store.add(makeEvent({
-        id: 'del1', kind: 5, pubkey: 'pk1', created_at: 2000,
-        tags: [['e', 'target']],
-      }));
+      await store.add(
+        makeEvent({
+          id: 'del1',
+          kind: 5,
+          pubkey: 'pk1',
+          created_at: 2000,
+          tags: [['e', 'target']],
+        }),
+      );
       await store.add(makeEvent({ id: 'target', kind: 1, pubkey: 'pk1', created_at: 1000 }));
       await flush();
       const events = await firstValueFrom(store.query({ ids: ['target'] }).pipe(skip(1)));
@@ -136,14 +173,24 @@ describe('NostrEventStore', () => {
     });
 
     it('handles a-tag deletion for addressable events', async () => {
-      await store.add(makeEvent({
-        id: 'addr1', kind: 30023, pubkey: 'pk1', created_at: 1000,
-        tags: [['d', 'mypost']],
-      }));
-      await store.add(makeEvent({
-        id: 'del1', kind: 5, pubkey: 'pk1', created_at: 2000,
-        tags: [['a', '30023:pk1:mypost']],
-      }));
+      await store.add(
+        makeEvent({
+          id: 'addr1',
+          kind: 30023,
+          pubkey: 'pk1',
+          created_at: 1000,
+          tags: [['d', 'mypost']],
+        }),
+      );
+      await store.add(
+        makeEvent({
+          id: 'del1',
+          kind: 5,
+          pubkey: 'pk1',
+          created_at: 2000,
+          tags: [['a', '30023:pk1:mypost']],
+        }),
+      );
       await flush();
       const events = await firstValueFrom(store.query({ kinds: [30023] }).pipe(skip(1)));
       expect(events).toHaveLength(0);
@@ -153,7 +200,7 @@ describe('NostrEventStore', () => {
   describe('query()', () => {
     it('returns reactive Observable that updates on add', async () => {
       const collected: number[] = [];
-      const sub = store.query({ kinds: [1] }).subscribe(events => {
+      const sub = store.query({ kinds: [1] }).subscribe((events) => {
         collected.push(events.length);
       });
 
@@ -169,10 +216,14 @@ describe('NostrEventStore', () => {
     it('excludes deleted events', async () => {
       await store.add(makeEvent({ id: 'a', kind: 1, pubkey: 'pk1' }));
       await store.add(makeEvent({ id: 'b', kind: 1, pubkey: 'pk1' }));
-      await store.add(makeEvent({
-        id: 'del', kind: 5, pubkey: 'pk1',
-        tags: [['e', 'a']],
-      }));
+      await store.add(
+        makeEvent({
+          id: 'del',
+          kind: 5,
+          pubkey: 'pk1',
+          tags: [['e', 'a']],
+        }),
+      );
       await flush();
       const events = await firstValueFrom(store.query({ kinds: [1] }).pipe(skip(1)));
       expect(events).toHaveLength(1);
@@ -184,7 +235,9 @@ describe('NostrEventStore', () => {
       await store.add(makeEvent({ id: 'b', created_at: 200 }));
       await store.add(makeEvent({ id: 'c', created_at: 300 }));
       await flush();
-      const events = await firstValueFrom(store.query({ since: 150, until: 250, limit: 10 }).pipe(skip(1)));
+      const events = await firstValueFrom(
+        store.query({ since: 150, until: 250, limit: 10 }).pipe(skip(1)),
+      );
       expect(events).toHaveLength(1);
       expect(events[0].event.id).toBe('b');
     });
@@ -193,14 +246,14 @@ describe('NostrEventStore', () => {
   describe('changes$', () => {
     it('emits on add', async () => {
       const changes: string[] = [];
-      store.changes$.subscribe(c => changes.push(c.type));
+      store.changes$.subscribe((c) => changes.push(c.type));
       await store.add(makeEvent());
       expect(changes).toContain('added');
     });
 
     it('emits replaced on replaceable update', async () => {
       const changes: string[] = [];
-      store.changes$.subscribe(c => changes.push(c.type));
+      store.changes$.subscribe((c) => changes.push(c.type));
       await store.add(makeEvent({ id: 'old', kind: 0, created_at: 1000 }));
       await store.add(makeEvent({ id: 'new', kind: 0, created_at: 2000 }));
       expect(changes).toContain('replaced');
@@ -208,12 +261,16 @@ describe('NostrEventStore', () => {
 
     it('emits deleted on kind:5', async () => {
       const changes: string[] = [];
-      store.changes$.subscribe(c => changes.push(c.type));
+      store.changes$.subscribe((c) => changes.push(c.type));
       await store.add(makeEvent({ id: 'target', kind: 1, pubkey: 'pk1' }));
-      await store.add(makeEvent({
-        id: 'del1', kind: 5, pubkey: 'pk1',
-        tags: [['e', 'target']],
-      }));
+      await store.add(
+        makeEvent({
+          id: 'del1',
+          kind: 5,
+          pubkey: 'pk1',
+          tags: [['e', 'target']],
+        }),
+      );
       expect(changes).toContain('deleted');
     });
   });

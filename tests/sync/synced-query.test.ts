@@ -6,11 +6,16 @@ import { connectStore } from '../../src/sync/global-feed.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 import type { NostrEvent, CachedEvent, SyncStatus } from '../../src/types.js';
 
-const wait = (ms = 30) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: 'hello', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: 'hello',
+  sig: 'sig1',
   ...overrides,
 });
 
@@ -60,10 +65,16 @@ function createMockRxReqFactories() {
         _strategy: 'backward',
         _filters: filters,
         emit: vi.fn((f: any) => filters.push(f)),
-        over: vi.fn(() => { overCalled = true; }),
+        over: vi.fn(() => {
+          overCalled = true;
+        }),
         getReqPacketObservable: () => new Observable(() => {}),
-        get strategy() { return 'backward' as const; },
-        get rxReqId() { return 'mock-backward'; },
+        get strategy() {
+          return 'backward' as const;
+        },
+        get rxReqId() {
+          return 'mock-backward';
+        },
       };
     }),
     createRxForwardReq: vi.fn(() => {
@@ -73,8 +84,12 @@ function createMockRxReqFactories() {
         _filters: filters,
         emit: vi.fn((f: any) => filters.push(f)),
         getReqPacketObservable: () => new Observable(() => {}),
-        get strategy() { return 'forward' as const; },
-        get rxReqId() { return 'mock-forward'; },
+        get strategy() {
+          return 'forward' as const;
+        },
+        get rxReqId() {
+          return 'mock-forward';
+        },
       };
     }),
   };
@@ -93,11 +108,10 @@ describe('createSyncedQuery', () => {
 
   describe('API shape', () => {
     it('takes rxNostr as first argument and returns events$, status$, emit, dispose', () => {
-      const { events$, status$, emit, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'backward' },
-      );
+      const { events$, status$, emit, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+      });
       expect(events$).toBeDefined();
       expect(status$).toBeDefined();
       expect(typeof emit).toBe('function');
@@ -111,13 +125,12 @@ describe('createSyncedQuery', () => {
       // Subscribe BEFORE creating query to catch all status emissions
       const statuses: SyncStatus[] = [];
 
-      const { status$, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'backward' },
-      );
+      const { status$, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+      });
       // BehaviorSubject replays current value immediately
-      status$.subscribe(s => statuses.push(s));
+      status$.subscribe((s) => statuses.push(s));
 
       await wait();
       expect(mockRxNostr.use).toHaveBeenCalled();
@@ -135,11 +148,10 @@ describe('createSyncedQuery', () => {
     });
 
     it('calls rxNostr.use() with backward req', async () => {
-      const { dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'backward' },
-      );
+      const { dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+      });
       await wait(); // wait for async sinceTracker
       expect(mockRxNostr.use).toHaveBeenCalled();
       dispose();
@@ -148,14 +160,13 @@ describe('createSyncedQuery', () => {
 
   describe('strategy: forward', () => {
     it('status transitions to live', async () => {
-      const { status$, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'forward' },
-      );
+      const { status$, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'forward',
+      });
       // BehaviorSubject replays current — should already be 'live'
       const statuses: SyncStatus[] = [];
-      status$.subscribe(s => statuses.push(s));
+      status$.subscribe((s) => statuses.push(s));
       await wait();
 
       expect(statuses).toContain('live');
@@ -166,12 +177,11 @@ describe('createSyncedQuery', () => {
   describe('strategy: dual', () => {
     it('status transitions: fetching → live after backward completes', async () => {
       const statuses: SyncStatus[] = [];
-      const { status$, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'dual' },
-      );
-      status$.subscribe(s => statuses.push(s));
+      const { status$, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'dual',
+      });
+      status$.subscribe((s) => statuses.push(s));
 
       await wait();
       expect(statuses).toContain('fetching');
@@ -189,15 +199,11 @@ describe('createSyncedQuery', () => {
 
   describe('on option (relay targeting)', () => {
     it('passes on option to rxNostr.use()', async () => {
-      const { dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        {
-          filter: { kinds: [1] },
-          strategy: 'backward',
-          on: { relays: ['wss://specific.relay'] },
-        },
-      );
+      const { dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+        on: { relays: ['wss://specific.relay'] },
+      });
       await wait(); // wait for async sinceTracker
       const call = mockRxNostr.use.mock.calls[0];
       expect(call[1]).toEqual(
@@ -212,34 +218,28 @@ describe('createSyncedQuery', () => {
       await store.add(makeEvent({ id: 'cached1', kind: 1 }));
       await wait();
 
-      const { events$, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'backward' },
-      );
+      const { events$, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+      });
 
-      const events = await firstValueFrom(
-        events$.pipe(filter((e: CachedEvent[]) => e.length > 0)),
-      );
+      const events = await firstValueFrom(events$.pipe(filter((e: CachedEvent[]) => e.length > 0)));
       expect(events[0].event.id).toBe('cached1');
       dispose();
     });
 
     it('updates when store receives new events via connectStore', async () => {
-      const { events$, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'forward' },
-      );
+      const { events$, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'forward',
+      });
 
       await wait();
       // Feed event through the global feed
       mockRxNostr.allEvents$.next({ event: makeEvent({ id: 'new1' }), from: 'wss://r1' });
       await wait();
 
-      const events = await firstValueFrom(
-        events$.pipe(filter((e: CachedEvent[]) => e.length > 0)),
-      );
+      const events = await firstValueFrom(events$.pipe(filter((e: CachedEvent[]) => e.length > 0)));
       expect(events[0].event.id).toBe('new1');
       dispose();
     });
@@ -247,11 +247,10 @@ describe('createSyncedQuery', () => {
 
   describe('emit() filter change', () => {
     it('cancels previous backward and starts new one', async () => {
-      const { emit, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'backward' },
-      );
+      const { emit, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+      });
 
       const callsBefore = mockRxNostr.use.mock.calls.length;
       emit({ kinds: [7] });
@@ -265,16 +264,23 @@ describe('createSyncedQuery', () => {
 
   describe('dispose()', () => {
     it('completes events$ and status$', () => {
-      const { events$, status$, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'backward' },
-      );
+      const { events$, status$, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+      });
 
       let eventsCompleted = false;
       let statusCompleted = false;
-      events$.subscribe({ complete: () => { eventsCompleted = true; } });
-      status$.subscribe({ complete: () => { statusCompleted = true; } });
+      events$.subscribe({
+        complete: () => {
+          eventsCompleted = true;
+        },
+      });
+      status$.subscribe({
+        complete: () => {
+          statusCompleted = true;
+        },
+      });
 
       dispose();
       expect(eventsCompleted).toBe(true);
@@ -282,11 +288,10 @@ describe('createSyncedQuery', () => {
     });
 
     it('emit() after dispose is no-op', () => {
-      const { emit, dispose } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'backward' },
-      );
+      const { emit, dispose } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+      });
       dispose();
       expect(() => emit({ kinds: [7] })).not.toThrow();
     });
@@ -295,11 +300,11 @@ describe('createSyncedQuery', () => {
   describe('staleTime', () => {
     it('skips REQ when cache is fresh', async () => {
       // First query — should send REQ
-      const { dispose: d1 } = createSyncedQuery(
-        mockRxNostr as any,
-        store,
-        { filter: { kinds: [1] }, strategy: 'backward', staleTime: 60_000 },
-      );
+      const { dispose: d1 } = createSyncedQuery(mockRxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'backward',
+        staleTime: 60_000,
+      });
       await wait(); // wait for async sinceTracker
       const firstCallCount = mockRxNostr.use.mock.calls.length;
       expect(firstCallCount).toBeGreaterThan(0);

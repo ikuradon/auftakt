@@ -1,9 +1,9 @@
 import type { NostrEvent, NostrFilter } from '../types.js';
 
 export function matchesFilter(event: NostrEvent, filter: NostrFilter): boolean {
-  if (filter.ids && !filter.ids.some(id => event.id.startsWith(id))) return false;
+  if (filter.ids && !filter.ids.some((id) => event.id.startsWith(id))) return false;
   if (filter.kinds && !filter.kinds.includes(event.kind)) return false;
-  if (filter.authors && !filter.authors.some(a => event.pubkey.startsWith(a))) return false;
+  if (filter.authors && !filter.authors.some((a) => event.pubkey.startsWith(a))) return false;
   if (filter.since !== undefined && event.created_at < filter.since) return false;
   if (filter.until !== undefined && event.created_at > filter.until) return false;
 
@@ -13,11 +13,9 @@ export function matchesFilter(event: NostrEvent, filter: NostrFilter): boolean {
     const requiredValues = filter[key as `#${string}`];
     if (!requiredValues || requiredValues.length === 0) continue;
 
-    const eventTagValues = event.tags
-      .filter(t => t[0] === tagName)
-      .map(t => t[1]);
+    const eventTagValues = event.tags.filter((t) => t[0] === tagName).map((t) => t[1]);
 
-    const hasMatch = requiredValues.some(v => eventTagValues.includes(v));
+    const hasMatch = requiredValues.some((v) => eventTagValues.includes(v));
     if (!hasMatch) return false;
   }
 

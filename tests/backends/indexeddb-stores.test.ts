@@ -7,7 +7,15 @@ import type { NostrEvent } from '../../src/types.js';
 let dbCounter = 100;
 
 const makeStored = (id: string, kind = 1): StoredEvent => ({
-  event: { id, kind, pubkey: 'pk1', created_at: 1000, tags: [], content: '', sig: 's' } as NostrEvent,
+  event: {
+    id,
+    kind,
+    pubkey: 'pk1',
+    created_at: 1000,
+    tags: [],
+    content: '',
+    sig: 's',
+  } as NostrEvent,
   seenOn: ['wss://r1'],
   firstSeen: 1000,
   _tag_index: [],

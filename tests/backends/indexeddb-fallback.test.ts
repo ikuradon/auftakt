@@ -3,8 +3,13 @@ import type { StorageBackend } from '../../src/backends/interface.js';
 import type { NostrEvent } from '../../src/types.js';
 
 const baseEvent: NostrEvent = {
-  id: 'e1', kind: 1, pubkey: 'pk1', created_at: 1000,
-  tags: [], content: 'hello', sig: 'sig1',
+  id: 'e1',
+  kind: 1,
+  pubkey: 'pk1',
+  created_at: 1000,
+  tags: [],
+  content: 'hello',
+  sig: 'sig1',
 };
 
 describe('indexedDBBackend SSR fallback', () => {

@@ -5,7 +5,7 @@ import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 import type { CachedEvent } from '../../src/types.js';
 
-const wait = (ms = 30) => new Promise(r => setTimeout(r, ms));
+const wait = (ms = 30) => new Promise((r) => setTimeout(r, ms));
 
 describe('publishEvent', () => {
   it('calls rxNostr.send and returns ok$', () => {
@@ -24,15 +24,20 @@ describe('publishEvent', () => {
     const store = createEventStore({ backend: memoryBackend() });
 
     const signedEvent = {
-      id: 'signed1', kind: 1, pubkey: 'pk1', created_at: 1000,
-      tags: [], content: 'hello', sig: 'sig1',
+      id: 'signed1',
+      kind: 1,
+      pubkey: 'pk1',
+      created_at: 1000,
+      tags: [],
+      content: 'hello',
+      sig: 'sig1',
     };
 
     publishEvent(mockRxNostr as any, store, signedEvent, { optimistic: true });
     await wait();
 
     const events = await firstValueFrom(
-      store.query({ ids: ['signed1'] }).pipe(filter((e: CachedEvent[]) => e.length > 0))
+      store.query({ ids: ['signed1'] }).pipe(filter((e: CachedEvent[]) => e.length > 0)),
     );
     expect(events).toHaveLength(1);
   });
@@ -43,8 +48,13 @@ describe('publishEvent', () => {
     const store = createEventStore({ backend: memoryBackend() });
 
     const signedEvent = {
-      id: 'signed2', kind: 1, pubkey: 'pk1', created_at: 1000,
-      tags: [], content: 'hello', sig: 'sig1',
+      id: 'signed2',
+      kind: 1,
+      pubkey: 'pk1',
+      created_at: 1000,
+      tags: [],
+      content: 'hello',
+      sig: 'sig1',
     };
 
     publishEvent(mockRxNostr as any, store, signedEvent);
