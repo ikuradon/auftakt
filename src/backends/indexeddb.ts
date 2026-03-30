@@ -1,6 +1,7 @@
 import type { NostrFilter } from '../types.js';
 import type { StorageBackend, StoredEvent } from './interface.js';
 import { matchesFilter } from '../core/filter-matcher.js';
+import { memoryBackend as memoryBackendFallback } from './memory.js';
 
 const DB_VERSION = 1;
 
@@ -30,6 +31,11 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
 }
 
 export function indexedDBBackend(dbName: string): StorageBackend {
+  // SSR fallback: when indexedDB is not available, use memory backend
+  if (typeof indexedDB === 'undefined') {
+    return memoryBackendFallback();
+  }
+
   let dbPromise: Promise<IDBDatabase> | null = null;
 
   function getDB(): Promise<IDBDatabase> {
@@ -39,13 +45,18 @@ export function indexedDBBackend(dbName: string): StorageBackend {
 
   return {
     async put(stored: StoredEvent): Promise<void> {
-      const db = await getDB();
-      const tx = db.transaction('events', 'readwrite');
-      tx.objectStore('events').put(stored);
-      await new Promise<void>((resolve, reject) => {
-        tx.oncomplete = () => resolve();
-        tx.onerror = () => reject(tx.error);
-      });
+      try {
+        const db = await getDB();
+        const tx = db.transaction('events', 'readwrite');
+        tx.objectStore('events').put(stored);
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (err) {
+        console.warn('[auftakt] IndexedDB write failed:', err);
+        // Don't throw — memory state may still be updated by the store layer
+      }
     },
 
     async get(eventId: string): Promise<StoredEvent | null> {
