@@ -10,7 +10,7 @@ hero:
       link: /guide/getting-started
     - theme: alt
       text: API Reference
-      link: /api/store
+      link: /reference/api
     - theme: alt
       text: GitHub
       link: https://github.com/ikuradon/auftakt

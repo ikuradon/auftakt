@@ -1,9 +1,14 @@
 import { defineConfig } from 'vitepress';
 
 export default defineConfig({
-  title: '@ikuradon/auftakt',
+  title: 'auftakt',
   description: 'Reactive event store for rx-nostr with NIP semantics',
   base: '/auftakt/',
+  lastUpdated: true,
+  srcExclude: ['design.md', 'specs/**', 'plans/**', 'review-*.md'],
+  markdown: {
+    lineNumbers: true,
+  },
 
   head: [
     ['meta', { property: 'og:title', content: '@ikuradon/auftakt' }],
@@ -13,7 +18,7 @@ export default defineConfig({
   themeConfig: {
     nav: [
       { text: 'Guide', link: '/guide/getting-started' },
-      { text: 'API', link: '/api/store' },
+      { text: 'Reference', link: '/reference/api' },
       { text: 'GitHub', link: 'https://github.com/ikuradon/auftakt' },
     ],
 
@@ -29,14 +34,11 @@ export default defineConfig({
         ],
       },
       {
-        text: 'API Reference',
+        text: 'Reference',
         items: [
-          { text: 'createEventStore', link: '/api/store' },
-          { text: 'connectStore', link: '/api/connect-store' },
-          { text: 'createSyncedQuery', link: '/api/synced-query' },
-          { text: 'publishEvent', link: '/api/publish' },
-          { text: 'Backends', link: '/api/backends' },
-          { text: 'Types', link: '/api/types' },
+          { text: 'API', link: '/reference/api' },
+          { text: 'Architecture', link: '/reference/architecture' },
+          { text: 'NIP Support', link: '/reference/nip-support' },
         ],
       },
     ],

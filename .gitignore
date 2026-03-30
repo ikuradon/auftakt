@@ -1,5 +1,5 @@
 node_modules/
 dist/
 coverage/
-website/.vitepress/cache/
-website/.vitepress/dist/
+docs/.vitepress/cache/
+docs/.vitepress/dist/
