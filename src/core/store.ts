@@ -262,8 +262,14 @@ export function createEventStore(options: EventStoreOptions): EventStore {
     },
 
     query(filter: NostrFilter): Observable<CachedEvent[]> {
-      const { observable } = queryManager.registerQuery(filter);
-      return observable;
+      const { id, observable } = queryManager.registerQuery(filter);
+      return new Observable<CachedEvent[]>(subscriber => {
+        const sub = observable.subscribe(subscriber);
+        return () => {
+          sub.unsubscribe();
+          queryManager.unregisterQuery(id);
+        };
+      });
     },
 
     async fetchById(eventId: string, options?: FetchByIdOptions): Promise<CachedEvent | null> {
