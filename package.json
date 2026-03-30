@@ -21,6 +21,10 @@
     "./sync": {
       "types": "./dist/sync/index.d.ts",
       "import": "./dist/sync/index.js"
+    },
+    "./adapters/svelte": {
+      "types": "./dist/adapters/svelte.d.ts",
+      "import": "./dist/adapters/svelte.js"
     }
   },
   "files": [
