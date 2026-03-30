@@ -20,6 +20,12 @@ export function createNegativeCache(): NegativeCache {
 
     set(eventId: string, ttlMs: number): void {
       entries.set(eventId, Date.now() + ttlMs);
+      if (entries.size > 10000) {
+        const now = Date.now();
+        for (const [id, expiresAt] of entries) {
+          if (expiresAt <= now) entries.delete(id);
+        }
+      }
     },
 
     delete(eventId: string): void {

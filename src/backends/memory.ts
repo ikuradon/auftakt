@@ -157,21 +157,6 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
 
       for (const stored of byId.values()) {
         if (!matchesFilter(stored.event, filter)) continue;
-
-        let tagMatch = true;
-        for (const key of Object.keys(filter)) {
-          if (!key.startsWith('#')) continue;
-          const tagName = key.slice(1);
-          const values = filter[key as `#${string}`];
-          if (!values || values.length === 0) continue;
-          const tagKeys = values.map(v => `${tagName}:${v}`);
-          if (!stored._tag_index.some(ti => tagKeys.includes(ti))) {
-            tagMatch = false;
-            break;
-          }
-        }
-        if (!tagMatch) continue;
-
         results.push(stored);
       }
 

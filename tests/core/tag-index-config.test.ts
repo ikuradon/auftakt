@@ -21,7 +21,6 @@ describe('tag index configuration', () => {
     }));
     await wait();
 
-    // All tag queries should work
     for (const [tag, value] of [['e', 'ref1'], ['p', 'pk2'], ['t', 'nostr'], ['x', 'custom']]) {
       const events = await firstValueFrom(
         store.query({ [`#${tag}`]: [value] }).pipe(filter((e: CachedEvent[]) => e.length > 0))
@@ -30,61 +29,42 @@ describe('tag index configuration', () => {
     }
   });
 
-  it('restricts indexing to specified tags when indexedTags is set', async () => {
+  it('indexedTags restricts IDB index entries but memory queries still work via matchesFilter', async () => {
+    // indexedTags only affects _tag_index (IDB optimization).
+    // Memory backend queries via matchesFilter() which checks event.tags directly.
+    // So all tag queries still work regardless of indexedTags setting.
     const store = createEventStore({
       backend: memoryBackend(),
       indexedTags: ['e', 'p'],
     });
     await store.add(makeEvent({
       id: 'a',
-      tags: [['e', 'ref1'], ['p', 'pk2'], ['t', 'nostr'], ['x', 'custom']],
+      tags: [['e', 'ref1'], ['p', 'pk2'], ['t', 'nostr']],
     }));
     await wait();
 
-    // Indexed tags should work
-    const eResult = await firstValueFrom(
-      store.query({ '#e': ['ref1'] }).pipe(filter((e: CachedEvent[]) => e.length > 0))
-    );
-    expect(eResult).toHaveLength(1);
-
-    const pResult = await firstValueFrom(
-      store.query({ '#p': ['pk2'] }).pipe(filter((e: CachedEvent[]) => e.length > 0))
-    );
-    expect(pResult).toHaveLength(1);
-
-    // Non-indexed tags should NOT match
-    // Wait for query to fully flush, then verify empty
-    const tCollected: number[] = [];
-    const sub = store.query({ '#t': ['nostr'] }).subscribe(e => tCollected.push(e.length));
-    await wait(100);
-    sub.unsubscribe();
-    // All emissions should be 0 (never finds the event via #t since 't' is not indexed)
-    expect(tCollected.every(n => n === 0)).toBe(true);
+    // All tags queryable via matchesFilter
+    for (const [tag, value] of [['e', 'ref1'], ['p', 'pk2'], ['t', 'nostr']]) {
+      const events = await firstValueFrom(
+        store.query({ [`#${tag}`]: [value] }).pipe(filter((e: CachedEvent[]) => e.length > 0))
+      );
+      expect(events).toHaveLength(1);
+    }
   });
 
-  it('passes indexedTags through to backend via stored event', async () => {
-    const store = createEventStore({
-      backend: memoryBackend(),
-      indexedTags: ['e'],
-    });
-
+  it('indexedTags restricts _tag_index content in stored events', async () => {
+    // Verify that the stored event's _tag_index only contains indexed tags
+    const backend = memoryBackend();
+    const store = createEventStore({ backend, indexedTags: ['e'] });
     await store.add(makeEvent({
       id: 'a',
       tags: [['e', 'ref1'], ['p', 'pk2']],
     }));
-    await wait();
 
-    // #e works
-    const eResult = await firstValueFrom(
-      store.query({ '#e': ['ref1'] }).pipe(filter((e: CachedEvent[]) => e.length > 0))
-    );
-    expect(eResult).toHaveLength(1);
-
-    // #p doesn't (not indexed)
-    const pCollected: number[] = [];
-    const sub = store.query({ '#p': ['pk2'] }).subscribe(e => pCollected.push(e.length));
-    await wait(100);
-    sub.unsubscribe();
-    expect(pCollected.every(n => n === 0)).toBe(true);
+    const stored = await backend.get('a');
+    // Only 'e' tag should be in _tag_index
+    expect(stored?._tag_index).toEqual(['e:ref1']);
+    // 'p' tag should NOT be in _tag_index (not indexed)
+    expect(stored?._tag_index).not.toContain('p:pk2');
   });
 });

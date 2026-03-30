@@ -36,6 +36,17 @@ function fetchDeletionsForChunk(
 ): Promise<void> {
   return new Promise<void>((resolve) => {
     const reqPacketSubject = new Subject<any>();
+    let done = false;
+
+    const finish = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      subscription.unsubscribe();
+      resolve();
+    };
+
+    const timer = setTimeout(finish, 10_000);
 
     const subscription = rxNostr.use({
       strategy: 'backward' as const,
@@ -47,16 +58,11 @@ function fetchDeletionsForChunk(
       next: (packet: any) => {
         void store.add(packet.event, { relay: packet.from });
       },
-      complete: () => resolve(),
-      error: () => resolve(),
+      complete: finish,
+      error: finish,
     });
 
     reqPacketSubject.next({ filters: [{ kinds: [5], '#e': eventIds }] });
     reqPacketSubject.complete();
-
-    setTimeout(() => {
-      subscription.unsubscribe();
-      resolve();
-    }, 10_000);
   });
 }

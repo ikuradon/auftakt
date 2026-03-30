@@ -60,6 +60,7 @@ export async function loadSnapshot(
 
   let count = 0;
   for (const event of events) {
+    if (!event || !event.id || typeof event.kind !== 'number') continue;
     const result = await store.add(event);
     if (result === 'added' || result === 'replaced') count++;
   }

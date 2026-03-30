@@ -146,7 +146,17 @@ export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptio
         const values = filter[tagKeys[0] as `#${string}`] ?? [];
         if (values.length > 0) {
           const index = store.index('tag_index');
-          rawResults = await idbRequest(index.getAll(`${tagName}:${values[0]}`));
+          const allResults: StoredEvent[] = [];
+          for (const v of values) {
+            const partial = await idbRequest(index.getAll(`${tagName}:${v}`));
+            allResults.push(...partial);
+          }
+          const seen = new Set<string>();
+          rawResults = allResults.filter(s => {
+            if (seen.has(s.event.id)) return false;
+            seen.add(s.event.id);
+            return true;
+          });
         } else {
           rawResults = await idbRequest(store.getAll());
         }

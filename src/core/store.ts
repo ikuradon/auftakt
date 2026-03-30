@@ -53,6 +53,8 @@ export interface EventStore {
   fetchById(eventId: string, options?: FetchByIdOptions): Promise<CachedEvent | null>;
   /** Non-reactive snapshot query. Returns a Promise of CachedEvent[]. */
   getSync(filter: NostrFilter): Promise<CachedEvent[]>;
+  /** Dispose the store: completes changes$, unregisters all queries. */
+  dispose(): void;
   /** @internal Used by connectStore to register its filter for mismatch detection */
   _setConnectFilter(filter: ConnectStoreFilter | undefined): void;
   /** @internal Used by createSyncedQuery to check for filter mismatch */
@@ -143,8 +145,10 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
   async function processKind5(event: NostrEvent): Promise<void> {
     const eTargets = event.tags.filter(t => t[0] === 'e').map(t => t[1]);
-    for (const targetId of eTargets) {
-      const existing = await backend.get(targetId);
+    const existingEvents = await Promise.all(
+      eTargets.map(id => backend.get(id).then(e => [id, e] as const))
+    );
+    for (const [targetId, existing] of existingEvents) {
       if (existing) {
         if (existing.event.pubkey === event.pubkey) {
           deletedIds.add(targetId);
@@ -209,8 +213,8 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       const existing = await backend.get(event.id);
       if (existing) {
         if (meta?.relay && !existing.seenOn.includes(meta.relay)) {
-          existing.seenOn.push(meta.relay);
-          await backend.put(existing);
+          const updated = { ...existing, seenOn: [...existing.seenOn, meta.relay] };
+          await backend.put(updated);
         }
         return 'duplicate';
       }
@@ -357,6 +361,11 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         .sort((a, b) => b.event.created_at - a.event.created_at)
         .slice(0, filter.limit ?? Infinity)
         .map(s => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
+    },
+
+    dispose(): void {
+      changeSubject.complete();
+      inflight.clear();
     },
 
     _setConnectFilter(filter: ConnectStoreFilter | undefined): void {

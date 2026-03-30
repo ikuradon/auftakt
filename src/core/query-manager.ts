@@ -197,6 +197,8 @@ export class QueryManager {
           const output = this.toOutput(results);
           query.cachedResults = output;
           query.subject.next(output);
+        }).catch(err => {
+          console.warn('[auftakt] Query refresh failed:', err);
         });
       } else {
         // Differential: insert added events into cached results
