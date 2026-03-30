@@ -30,6 +30,8 @@ export default defineConfig({
               text: 'ガイド',
               items: [
                 { text: 'はじめに', link: '/guide/getting-started' },
+                { text: 'チュートリアル: ゼロから始める', link: '/guide/tutorial-new' },
+                { text: 'チュートリアル: rx-nostr に追加する', link: '/guide/tutorial-existing' },
                 { text: 'コアコンセプト', link: '/guide/core-concepts' },
                 { text: 'バックエンド', link: '/guide/backends' },
                 { text: 'Svelte 連携', link: '/guide/svelte' },

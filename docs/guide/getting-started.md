@@ -63,6 +63,8 @@ status$.subscribe((status) => {
 
 ## 次のステップ
 
+- [チュートリアル: ゼロから始める](/guide/tutorial-new) — rx-nostr も初めての方向け
+- [チュートリアル: rx-nostr に追加する](/guide/tutorial-existing) — 既存アプリにキャッシュ層を追加
 - [コアコンセプト](/guide/core-concepts) — store.add() のフローと NIP セマンティクス
 - [バックエンド](/guide/backends) — Memory / IndexedDB / cached の使い分け
 - [API リファレンス](/reference/api) — 全 API の詳細
