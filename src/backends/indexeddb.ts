@@ -30,7 +30,11 @@ function idbRequest<T>(request: IDBRequest<T>): Promise<T> {
   });
 }
 
-export function indexedDBBackend(dbName: string): StorageBackend {
+export interface IndexedDBBackendOptions {
+  batchWrites?: boolean;
+}
+
+export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptions): StorageBackend {
   // SSR fallback: when indexedDB is not available, use memory backend
   if (typeof indexedDB === 'undefined') {
     return memoryBackendFallback();
@@ -43,8 +47,49 @@ export function indexedDBBackend(dbName: string): StorageBackend {
     return dbPromise;
   }
 
+  // Batch write buffer
+  const writeBuffer: StoredEvent[] = [];
+  let flushScheduled = false;
+  const flushCallbacks: Array<() => void> = [];
+
+  async function flushWrites(): Promise<void> {
+    if (writeBuffer.length === 0) {
+      flushScheduled = false;
+      return;
+    }
+    const batch = writeBuffer.splice(0);
+    const callbacks = flushCallbacks.splice(0);
+    flushScheduled = false;
+
+    try {
+      const db = await getDB();
+      const tx = db.transaction('events', 'readwrite');
+      const store = tx.objectStore('events');
+      for (const stored of batch) {
+        store.put(stored);
+      }
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+    } catch (err) {
+      console.warn('[auftakt] IndexedDB batch write failed:', err);
+    }
+    for (const cb of callbacks) cb();
+  }
+
   return {
     async put(stored: StoredEvent): Promise<void> {
+      if (options?.batchWrites) {
+        return new Promise<void>((resolve) => {
+          writeBuffer.push(stored);
+          flushCallbacks.push(resolve);
+          if (!flushScheduled) {
+            flushScheduled = true;
+            queueMicrotask(() => void flushWrites());
+          }
+        });
+      }
       try {
         const db = await getDB();
         const tx = db.transaction('events', 'readwrite');
@@ -55,7 +100,6 @@ export function indexedDBBackend(dbName: string): StorageBackend {
         });
       } catch (err) {
         console.warn('[auftakt] IndexedDB write failed:', err);
-        // Don't throw — memory state may still be updated by the store layer
       }
     },
 
