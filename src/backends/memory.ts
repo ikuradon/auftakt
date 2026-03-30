@@ -26,6 +26,8 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
   const byReplaceableKey = new Map<string, string>();
   const byAddressableKey = new Map<string, string>();
   const accessTime = new Map<string, number>();
+  const byKind = new Map<number, Set<string>>();
+  const byAuthor = new Map<string, Set<string>>();
   let pinnedIds = new Set<string>();
   let accessCounter = 0;
 
@@ -55,32 +57,29 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
     const budget = getBudget(kind);
     if (budget === undefined) return;
 
-    const kindEvents: string[] = [];
-    for (const [id, stored] of byId) {
-      if (stored.event.kind === kind) kindEvents.push(id);
-    }
+    const kindIds = byKind.get(kind);
+    if (!kindIds || kindIds.size <= budget) return;
 
-    if (kindEvents.length <= budget) return;
-
-    const candidates = kindEvents
+    const candidates = Array.from(kindIds)
       .filter(id => !pinnedIds.has(id))
       .sort((a, b) => (accessTime.get(a) ?? 0) - (accessTime.get(b) ?? 0));
 
-    const toRemove = candidates.slice(0, kindEvents.length - budget);
+    const toRemove = candidates.slice(0, kindIds.size - budget);
     for (const id of toRemove) {
       removeEvent(id);
     }
   }
 
   function evictGlobal(): void {
-    if (maxEvents === undefined) return;
-    while (byId.size > maxEvents) {
-      const candidates = Array.from(byId.keys())
-        .filter(id => !pinnedIds.has(id))
-        .sort((a, b) => (accessTime.get(a) ?? 0) - (accessTime.get(b) ?? 0));
+    if (maxEvents === undefined || byId.size <= maxEvents) return;
 
-      if (candidates.length === 0) break; // all pinned
-      removeEvent(candidates[0]);
+    const candidates = Array.from(byId.keys())
+      .filter(id => !pinnedIds.has(id))
+      .sort((a, b) => (accessTime.get(a) ?? 0) - (accessTime.get(b) ?? 0));
+
+    const toRemove = candidates.slice(0, byId.size - maxEvents);
+    for (const id of toRemove) {
+      removeEvent(id);
     }
   }
 
@@ -90,6 +89,20 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
     byId.delete(eventId);
     accessTime.delete(eventId);
     const { kind, pubkey } = stored.event;
+
+    // Clean kind index
+    const kindSet = byKind.get(kind);
+    if (kindSet) {
+      kindSet.delete(eventId);
+      if (kindSet.size === 0) byKind.delete(kind);
+    }
+    // Clean author index
+    const authorSet = byAuthor.get(pubkey);
+    if (authorSet) {
+      authorSet.delete(eventId);
+      if (authorSet.size === 0) byAuthor.delete(pubkey);
+    }
+
     if (kind === 0 || kind === 3 || (kind >= 10000 && kind < 20000)) {
       const key = `${kind}:${pubkey}`;
       if (byReplaceableKey.get(key) === eventId) byReplaceableKey.delete(key);
@@ -120,6 +133,23 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
       touch(event.id);
 
       const { kind, pubkey } = event;
+
+      // Maintain kind index
+      let kindSet = byKind.get(kind);
+      if (!kindSet) {
+        kindSet = new Set();
+        byKind.set(kind, kindSet);
+      }
+      kindSet.add(event.id);
+
+      // Maintain author index
+      let authorSet = byAuthor.get(pubkey);
+      if (!authorSet) {
+        authorSet = new Set();
+        byAuthor.set(pubkey, authorSet);
+      }
+      authorSet.add(event.id);
+
       if (kind === 0 || kind === 3 || (kind >= 10000 && kind < 20000)) {
         byReplaceableKey.set(`${kind}:${pubkey}`, event.id);
       }
@@ -153,14 +183,51 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
     },
 
     async query(filter: NostrFilter): Promise<StoredEvent[]> {
-      let results: StoredEvent[] = [];
+      let candidateIds: Iterable<string>;
 
-      for (const stored of byId.values()) {
-        if (!matchesFilter(stored.event, filter)) continue;
-        results.push(stored);
+      const hasKinds = filter.kinds && filter.kinds.length > 0;
+      const hasAuthors = filter.authors && filter.authors.length > 0;
+
+      if (hasKinds && hasAuthors) {
+        const kindCandidates = new Set<string>();
+        for (const k of filter.kinds!) {
+          const set = byKind.get(k);
+          if (set) for (const id of set) kindCandidates.add(id);
+        }
+        const intersected: string[] = [];
+        for (const a of filter.authors!) {
+          const set = byAuthor.get(a);
+          if (set) for (const id of set) {
+            if (kindCandidates.has(id)) intersected.push(id);
+          }
+        }
+        candidateIds = intersected;
+      } else if (hasKinds) {
+        const union: string[] = [];
+        for (const k of filter.kinds!) {
+          const set = byKind.get(k);
+          if (set) for (const id of set) union.push(id);
+        }
+        candidateIds = union;
+      } else if (hasAuthors) {
+        const union: string[] = [];
+        for (const a of filter.authors!) {
+          const set = byAuthor.get(a);
+          if (set) for (const id of set) union.push(id);
+        }
+        candidateIds = union;
+      } else {
+        candidateIds = byId.keys();
       }
 
-      // Touch all results
+      const results: StoredEvent[] = [];
+      for (const id of candidateIds) {
+        const stored = byId.get(id);
+        if (stored && matchesFilter(stored.event, filter)) {
+          results.push(stored);
+        }
+      }
+
       for (const stored of results) {
         touch(stored.event.id);
       }
@@ -168,7 +235,7 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
       results.sort((a, b) => b.event.created_at - a.event.created_at);
 
       if (filter.limit !== undefined && filter.limit > 0) {
-        results = results.slice(0, filter.limit);
+        return results.slice(0, filter.limit);
       }
 
       return results;
@@ -187,6 +254,8 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
       byReplaceableKey.clear();
       byAddressableKey.clear();
       accessTime.clear();
+      byKind.clear();
+      byAuthor.clear();
     },
   };
 }

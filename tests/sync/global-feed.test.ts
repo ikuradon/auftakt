@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Subject, firstValueFrom, skip } from 'rxjs';
 import { connectStore } from '../../src/sync/global-feed.js';
 import { createEventStore } from '../../src/core/store.js';
@@ -85,6 +85,44 @@ describe('connectStore', () => {
 
     const events = await firstValueFrom(store.query({ ids: ['after'] }).pipe(skip(1)));
     expect(events).toHaveLength(0);
+  });
+
+  it('reconcileDeletions fetches kind:5 for cached events on connect', async () => {
+    const store = createEventStore({ backend: memoryBackend() });
+    await store.add({
+      id: 'cached1', kind: 1, pubkey: 'pk1', created_at: 1000,
+      tags: [], content: '', sig: 'sig1',
+    } as NostrEvent);
+
+    const allEvents$ = new Subject<any>();
+    const useMock = vi.fn((_req: unknown) => {
+      const subject = new Subject<{ event: NostrEvent; from: string }>();
+      setTimeout(() => {
+        subject.next({
+          event: {
+            id: 'del1', kind: 5, pubkey: 'pk1', created_at: 2000,
+            tags: [['e', 'cached1']], content: '', sig: 'sig-del',
+          },
+          from: 'wss://relay1',
+        });
+        subject.complete();
+      }, 5);
+      return subject.asObservable();
+    });
+
+    const mockRxNostr = {
+      createAllEventObservable: () => allEvents$.asObservable(),
+      use: useMock,
+    };
+
+    connectStore(mockRxNostr as any, store, { reconcileDeletions: true });
+    await new Promise(r => setTimeout(r, 200));
+
+    const result = await store.add({
+      id: 'cached1', kind: 1, pubkey: 'pk1', created_at: 1000,
+      tags: [], content: '', sig: 'sig1',
+    } as NostrEvent);
+    expect(result).toBe('deleted');
   });
 
   it('excludes ephemeral events automatically (store rejects)', async () => {

@@ -26,6 +26,8 @@ export interface EventStoreOptions {
    * Set to e.g. `['e', 'p', 't', 'a', 'k']` to restrict indexing for performance.
    */
   indexedTags?: string[];
+  /** Maximum event size in characters (JSON.stringify length). undefined = unlimited. */
+  maxEventSize?: number;
 }
 
 export interface FetchByIdOptions {
@@ -55,6 +57,8 @@ export interface EventStore {
   getSync(filter: NostrFilter): Promise<CachedEvent[]>;
   /** Dispose the store: completes changes$, unregisters all queries. */
   dispose(): void;
+  /** Get all event IDs stored in the backend. Used by reconcileDeletions. */
+  getAllEventIds(): Promise<string[]>;
   /** @internal Used by connectStore to register its filter for mismatch detection */
   _setConnectFilter(filter: ConnectStoreFilter | undefined): void;
   /** @internal Used by createSyncedQuery to check for filter mismatch */
@@ -124,6 +128,19 @@ export function createEventStore(options: EventStoreOptions): EventStore {
   const negativeCache: NegativeCache = createNegativeCache();
   const inflight = new Map<string, Promise<CachedEvent | null>>();
   let connectFilter: ConnectStoreFilter | undefined;
+  const maxEventSize = options.maxEventSize;
+
+  function validateEvent(event: NostrEvent): boolean {
+    if (typeof event.id !== 'string') return false;
+    if (typeof event.pubkey !== 'string') return false;
+    if (typeof event.kind !== 'number' || !Number.isInteger(event.kind)) return false;
+    if (typeof event.created_at !== 'number') return false;
+    if (!Array.isArray(event.tags)) return false;
+    if (typeof event.content !== 'string') return false;
+    if (typeof event.sig !== 'string') return false;
+    if (maxEventSize !== undefined && JSON.stringify(event).length > maxEventSize) return false;
+    return true;
+  }
 
   queryManager.setQueryFn(filter => backend.query(filter));
 
@@ -131,7 +148,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
   function buildStoredEvent(event: NostrEvent, meta?: EventMeta): StoredEvent {
     const tagIndex = event.tags
-      .filter(t => t.length >= 2)
+      .filter(t => t.length >= 2 && t[0].length === 1)
       .filter(t => !indexedTags || indexedTags.includes(t[0]))
       .map(t => `${t[0]}:${t[1]}`);
     return {
@@ -188,6 +205,17 @@ export function createEventStore(options: EventStoreOptions): EventStore {
     return false;
   }
 
+  const MAX_DELETED_IDS = 50_000;
+
+  function trimDeletedIds(): void {
+    if (deletedIds.size <= MAX_DELETED_IDS) return;
+    const iter = deletedIds.values();
+    const toRemove = deletedIds.size - MAX_DELETED_IDS;
+    for (let i = 0; i < toRemove; i++) {
+      deletedIds.delete(iter.next().value!);
+    }
+  }
+
   function cleanPendingDeletions(): void {
     const threshold = Date.now() - 5 * 60 * 1000;
     for (const [id, entry] of pendingDeletions) {
@@ -203,6 +231,9 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
   const store: EventStore = {
     async add(event: NostrEvent, meta?: EventMeta): Promise<AddResult> {
+      // Step 0: Validate event structure
+      if (!validateEvent(event)) return 'rejected';
+
       // Step 1: Ephemeral
       if (classifyEvent(event) === 'ephemeral') return 'ephemeral';
 
@@ -274,12 +305,14 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         changeSubject.next({ event, type: 'deleted', relay: meta?.relay });
         queryManager.notifyDeletion(stored);
         cleanPendingDeletions();
+        trimDeletedIds();
         return 'deleted';
       }
 
       changeSubject.next({ event, type: 'added', relay: meta?.relay });
       queryManager.notifyPotentialChange(stored, 'added');
       cleanPendingDeletions();
+      trimDeletedIds();
       return 'added';
     },
 
@@ -365,7 +398,12 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
     dispose(): void {
       changeSubject.complete();
+      queryManager.disposeAll();
       inflight.clear();
+    },
+
+    async getAllEventIds(): Promise<string[]> {
+      return backend.getAllEventIds();
     },
 
     _setConnectFilter(filter: ConnectStoreFilter | undefined): void {

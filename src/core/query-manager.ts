@@ -60,6 +60,19 @@ export class QueryManager {
     }
   }
 
+  disposeAll(): void {
+    for (const query of this.queries.values()) {
+      query.subject.complete();
+    }
+    this.queries.clear();
+    this.pendingDirty.clear();
+    this.pendingFullRefresh.clear();
+    this.pendingAddedEvents.clear();
+    this.kindIndex.clear();
+    this.authorIndex.clear();
+    this.wildcardSet.clear();
+  }
+
   notifyPotentialChange(event: StoredEvent, changeType: ChangeType = 'added'): void {
     const candidates = this.getCandidateQueries(event.event.kind, event.event.pubkey);
     for (const queryId of candidates) {

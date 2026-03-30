@@ -17,7 +17,8 @@ export type AddResult =
   | 'deleted'
   | 'duplicate'
   | 'expired'
-  | 'ephemeral';
+  | 'ephemeral'
+  | 'rejected';
 
 /** store.changes$ が emit する変更通知 */
 export interface StoreChange {

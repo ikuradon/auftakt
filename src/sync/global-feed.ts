@@ -31,7 +31,11 @@ export function connectStore(
   });
 
   if (options?.reconcileDeletions && rxNostr.use) {
-    void reconcileDeletions(rxNostr as Parameters<typeof reconcileDeletions>[0], store);
+    store.getAllEventIds().then(ids => {
+      if (ids.length > 0) {
+        void reconcileDeletions(rxNostr as Parameters<typeof reconcileDeletions>[0], store, ids);
+      }
+    });
   }
 
   return () => {

@@ -1,9 +1,6 @@
-import { Subject, Observable } from 'rxjs';
+import { Subject } from 'rxjs';
 import type { EventStore } from '../core/store.js';
-
-interface RxNostrLike {
-  use(rxReq: any, options?: any): Observable<any>;
-}
+import type { RxNostrLike, EventPacketLike } from './synced-query.js';
 
 /**
  * Fetch kind:5 deletion events from relays for given event IDs.
@@ -35,7 +32,7 @@ function fetchDeletionsForChunk(
   eventIds: string[],
 ): Promise<void> {
   return new Promise<void>((resolve) => {
-    const reqPacketSubject = new Subject<any>();
+    const reqPacketSubject = new Subject<unknown>();
     let done = false;
 
     const finish = () => {
@@ -55,7 +52,7 @@ function fetchDeletionsForChunk(
         return reqPacketSubject.asObservable();
       },
     }).subscribe({
-      next: (packet: any) => {
+      next: (packet: EventPacketLike) => {
         void store.add(packet.event, { relay: packet.from });
       },
       complete: finish,

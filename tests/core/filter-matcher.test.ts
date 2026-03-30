@@ -62,4 +62,23 @@ describe('matchesFilter', () => {
   it('ignores limit (limit is not a filter condition)', () => {
     expect(matchesFilter(makeEvent(), { limit: 10 })).toBe(true);
   });
+
+  it('matches ids by prefix (NIP-01)', () => {
+    const event = makeEvent({ id: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' });
+    expect(matchesFilter(event, { ids: ['abcdef'] })).toBe(true);
+    expect(matchesFilter(event, { ids: ['abcdef1234567890'] })).toBe(true);
+    expect(matchesFilter(event, { ids: ['xxxxxx'] })).toBe(false);
+  });
+
+  it('matches authors by prefix (NIP-01)', () => {
+    const event = makeEvent({ pubkey: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890' });
+    expect(matchesFilter(event, { authors: ['abcdef'] })).toBe(true);
+    expect(matchesFilter(event, { authors: ['xyz'] })).toBe(false);
+  });
+
+  it('still matches ids by exact match', () => {
+    expect(matchesFilter(makeEvent({ id: 'abc' }), { ids: ['abc'] })).toBe(true);
+    expect(matchesFilter(makeEvent({ id: 'abc' }), { ids: ['ab'] })).toBe(true);
+    expect(matchesFilter(makeEvent({ id: 'abc' }), { ids: ['abcd'] })).toBe(false);
+  });
 });

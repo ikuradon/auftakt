@@ -32,7 +32,7 @@ interface UseOptions {
   on?: { relays?: string[] };
 }
 
-interface EventPacketLike {
+export interface EventPacketLike {
   event: NostrEvent;
   from: string;
 }
