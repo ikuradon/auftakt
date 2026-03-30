@@ -1,0 +1,50 @@
+{
+  "name": "@ikuradon/auftakt",
+  "version": "0.0.1",
+  "description": "Reactive event store for rx-nostr with NIP semantics",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./backends/memory": {
+      "types": "./dist/backends/memory.d.ts",
+      "import": "./dist/backends/memory.js"
+    },
+    "./backends/indexeddb": {
+      "types": "./dist/backends/indexeddb.d.ts",
+      "import": "./dist/backends/indexeddb.js"
+    },
+    "./sync": {
+      "types": "./dist/sync/index.d.ts",
+      "import": "./dist/sync/index.js"
+    }
+  },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "rx-nostr": "^3.0.0",
+    "rxjs": "^7.8.0"
+  },
+  "dependencies": {
+    "nostr-typedef": "^0.9.0"
+  },
+  "devDependencies": {
+    "rx-nostr": "^3.6.0",
+    "rxjs": "^7.8.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0",
+    "@vitest/coverage-v8": "^1.6.0",
+    "fake-indexeddb": "^6.0.0"
+  },
+  "license": "MIT"
+}
