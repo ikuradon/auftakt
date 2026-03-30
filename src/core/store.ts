@@ -51,6 +51,8 @@ export interface EventStore {
   add(event: NostrEvent, meta?: EventMeta): Promise<AddResult>;
   query(filter: NostrFilter): Observable<CachedEvent[]>;
   fetchById(eventId: string, options?: FetchByIdOptions): Promise<CachedEvent | null>;
+  /** Non-reactive snapshot query. Returns a Promise of CachedEvent[]. */
+  getSync(filter: NostrFilter): Promise<CachedEvent[]>;
   /** @internal Used by connectStore to register its filter for mismatch detection */
   _setConnectFilter(filter: ConnectStoreFilter | undefined): void;
   /** @internal Used by createSyncedQuery to check for filter mismatch */
@@ -345,6 +347,17 @@ export function createEventStore(options: EventStoreOptions): EventStore {
     },
 
     changes$: changeSubject.asObservable(),
+
+    async getSync(filter: NostrFilter): Promise<CachedEvent[]> {
+      const results = await backend.query(filter);
+      const now = Math.floor(Date.now() / 1000);
+      return results
+        .filter(s => !deletedIds.has(s.event.id))
+        .filter(s => !isExpired(s.event, now))
+        .sort((a, b) => b.event.created_at - a.event.created_at)
+        .slice(0, filter.limit ?? Infinity)
+        .map(s => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
+    },
 
     _setConnectFilter(filter: ConnectStoreFilter | undefined): void {
       connectFilter = filter;
