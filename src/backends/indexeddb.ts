@@ -3,7 +3,7 @@ import type { StorageBackend, StoredEvent } from './interface.js';
 import { matchesFilter } from '../core/filter-matcher.js';
 import { memoryBackend as memoryBackendFallback } from './memory.js';
 
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 
 function openDB(name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
@@ -16,6 +16,12 @@ function openDB(name: string): Promise<IDBDatabase> {
         store.createIndex('replace_key', ['event.kind', 'event.pubkey', '_d_tag']);
         store.createIndex('kind_created_at', ['event.kind', 'event.created_at']);
         store.createIndex('tag_index', '_tag_index', { multiEntry: true });
+      }
+      if (!db.objectStoreNames.contains('deleted')) {
+        db.createObjectStore('deleted', { keyPath: 'eventId' });
+      }
+      if (!db.objectStoreNames.contains('negative_cache')) {
+        db.createObjectStore('negative_cache', { keyPath: 'eventId' });
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -181,12 +187,66 @@ export function indexedDBBackend(dbName: string, options?: IndexedDBBackendOptio
 
     async clear(): Promise<void> {
       const db = await getDB();
-      const tx = db.transaction('events', 'readwrite');
+      const tx = db.transaction(['events', 'deleted', 'negative_cache'], 'readwrite');
       tx.objectStore('events').clear();
+      tx.objectStore('deleted').clear();
+      tx.objectStore('negative_cache').clear();
       await new Promise<void>((resolve, reject) => {
         tx.oncomplete = () => resolve();
         tx.onerror = () => reject(tx.error);
       });
+    },
+
+    async markDeleted(eventId: string, deletionEventId: string): Promise<void> {
+      try {
+        const db = await getDB();
+        const tx = db.transaction('deleted', 'readwrite');
+        tx.objectStore('deleted').put({ eventId, deletedBy: deletionEventId, deletedAt: Date.now() });
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (err) {
+        console.warn('[auftakt] IndexedDB markDeleted failed:', err);
+      }
+    },
+
+    async isDeleted(eventId: string): Promise<boolean> {
+      try {
+        const db = await getDB();
+        const tx = db.transaction('deleted', 'readonly');
+        const result = await idbRequest(tx.objectStore('deleted').get(eventId));
+        return result !== undefined;
+      } catch {
+        return false;
+      }
+    },
+
+    async setNegative(eventId: string, expiresAt: number): Promise<void> {
+      try {
+        const db = await getDB();
+        const tx = db.transaction('negative_cache', 'readwrite');
+        tx.objectStore('negative_cache').put({ eventId, expiresAt });
+        await new Promise<void>((resolve, reject) => {
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (err) {
+        console.warn('[auftakt] IndexedDB setNegative failed:', err);
+      }
+    },
+
+    async isNegative(eventId: string): Promise<boolean> {
+      try {
+        const db = await getDB();
+        const tx = db.transaction('negative_cache', 'readonly');
+        const result = await idbRequest(tx.objectStore('negative_cache').get(eventId));
+        if (!result) return false;
+        if (Date.now() >= result.expiresAt) return false;
+        return true;
+      } catch {
+        return false;
+      }
     },
   };
 }
