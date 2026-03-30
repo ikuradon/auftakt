@@ -20,6 +20,12 @@ import { createNegativeCache, type NegativeCache } from './negative-cache.js';
 
 export interface EventStoreOptions {
   backend: StorageBackend;
+  /**
+   * Tag names to index for `#<tag>` queries.
+   * Default: undefined (all tags indexed, NIP-01 compliant).
+   * Set to e.g. `['e', 'p', 't', 'a', 'k']` to restrict indexing for performance.
+   */
+  indexedTags?: string[];
 }
 
 export interface FetchByIdOptions {
@@ -110,9 +116,12 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
   queryManager.setQueryFn(filter => backend.query(filter));
 
+  const indexedTags = options.indexedTags;
+
   function buildStoredEvent(event: NostrEvent, meta?: EventMeta): StoredEvent {
     const tagIndex = event.tags
       .filter(t => t.length >= 2)
+      .filter(t => !indexedTags || indexedTags.includes(t[0]))
       .map(t => `${t[0]}:${t[1]}`);
     return {
       event,
