@@ -61,5 +61,8 @@
     "vitepress": "^1.6.4",
     "vitest": "^1.6.0"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "engines": {
+    "node": ">=24"
+  }
 }
