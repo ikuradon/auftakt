@@ -14,6 +14,7 @@ Creates a new event store instance.
 |----------|------|---------|-------------|
 | `backend` | `StorageBackend` | required | Storage backend (memory, indexeddb, cached) |
 | `indexedTags` | `string[]` | `undefined` (all) | Tag names to index for `#<tag>` queries. Default: all tags (NIP-01 compliant) |
+| `maxEventSize` | `number` | `undefined` | Maximum event size in characters (`JSON.stringify(event).length`). `undefined` = unlimited |
 
 ### Returns: `EventStore`
 
@@ -21,7 +22,7 @@ Creates a new event store instance.
 
 ```typescript
 const result = await store.add(event, { relay: 'wss://relay.example.com' });
-// result: 'added' | 'replaced' | 'deleted' | 'duplicate' | 'expired' | 'ephemeral'
+// result: 'added' | 'replaced' | 'deleted' | 'duplicate' | 'expired' | 'ephemeral' | 'rejected'
 ```
 
 Adds an event following NIP semantics. See [Core Concepts](/guide/core-concepts) for the full add() flow.
@@ -64,6 +65,22 @@ store.changes$.subscribe(({ event, type, relay }) => {
   // type: 'added' | 'replaced' | 'deleted'
 });
 ```
+
+## `store.getAllEventIds()`
+
+```typescript
+const ids = await store.getAllEventIds();
+```
+
+Returns `Promise<string[]>` — all event IDs in the backend. Used internally by `reconcileDeletions`.
+
+## `store.dispose()`
+
+```typescript
+store.dispose();
+```
+
+Completes `changes$`, completes all reactive query subscribers, and clears in-flight requests.
 
 # connectStore
 
@@ -323,7 +340,8 @@ type AddResult =
   | 'deleted'    // Event was in deletedIds (step 1.5) or pendingDeletions (step 8)
   | 'duplicate'  // Same event.id already exists
   | 'expired'    // NIP-40 expiration tag in the past
-  | 'ephemeral'; // Kind 20000-29999, not stored
+  | 'ephemeral'  // Kind 20000-29999, not stored
+  | 'rejected';  // Structure validation failed or size exceeded
 ```
 
 ## StoreChange
@@ -369,6 +387,7 @@ interface EventMeta {
 ```typescript
 interface EventStoreOptions {
   backend: StorageBackend;
-  indexedTags?: string[]; // default: all tags (NIP-01 compliant)
+  indexedTags?: string[];   // default: all tags (NIP-01 compliant)
+  maxEventSize?: number;    // JSON.stringify(event).length limit, undefined = unlimited
 }
 ```
