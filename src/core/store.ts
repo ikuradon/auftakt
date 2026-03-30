@@ -1,4 +1,5 @@
-import { Subject, Observable } from 'rxjs';
+import { Subject, Observable, BehaviorSubject, firstValueFrom, race, timer, EMPTY } from 'rxjs';
+import { take, map, filter as rxFilter, catchError } from 'rxjs/operators';
 import type {
   NostrEvent,
   CachedEvent,
@@ -22,6 +23,16 @@ export interface EventStoreOptions {
 }
 
 export interface FetchByIdOptions {
+  /**
+   * Fetch function that retrieves an event from relays.
+   * Expected to return a Promise resolving to { event, relay } or null.
+   * Example with rx-nostr:
+   * ```
+   * fetch: (id) => fetchEventFromRelay(rxNostr, id)
+   * ```
+   */
+  fetch?: (eventId: string) => Promise<{ event: NostrEvent; relay: string } | null>;
+  /** @deprecated Use `fetch` instead. Kept for convenience — internally creates a oneshot REQ. */
   rxNostr?: { use(req: any, options?: any): Observable<any> };
   relayHint?: string;
   timeout?: number;
@@ -33,6 +44,59 @@ export interface EventStore {
   query(filter: NostrFilter): Observable<CachedEvent[]>;
   fetchById(eventId: string, options?: FetchByIdOptions): Promise<CachedEvent | null>;
   changes$: Observable<StoreChange>;
+}
+
+function fetchFromRelay(
+  rxNostr: { use(req: any, options?: any): Observable<any> },
+  eventId: string,
+  timeout: number,
+  relayHint?: string,
+): Promise<{ event: NostrEvent; relay: string } | null> {
+  return new Promise<{ event: NostrEvent; relay: string } | null>((resolve) => {
+    const reqPacketSubject = new BehaviorSubject<any>(null);
+    let resolved = false;
+
+    const useOptions = relayHint ? { on: { relays: [relayHint] } } : undefined;
+
+    const subscription = rxNostr.use({
+      strategy: 'backward' as const,
+      rxReqId: `auftakt-fetch-${eventId}-${Date.now()}`,
+      getReqPacketObservable() {
+        return reqPacketSubject.asObservable();
+      },
+    }, useOptions).subscribe({
+      next: (packet: any) => {
+        if (!resolved && packet.event?.id === eventId) {
+          resolved = true;
+          subscription.unsubscribe();
+          resolve({ event: packet.event, relay: packet.from });
+        }
+      },
+      complete: () => {
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      },
+      error: () => {
+        if (!resolved) {
+          resolved = true;
+          resolve(null);
+        }
+      },
+    });
+
+    reqPacketSubject.next({ filters: [{ ids: [eventId] }] });
+    reqPacketSubject.complete();
+
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
+        subscription.unsubscribe();
+        resolve(null);
+      }
+    }, timeout);
+  });
 }
 
 export function createEventStore(options: EventStoreOptions): EventStore {
@@ -208,7 +272,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       if (pending) return pending;
 
       const promise = (async (): Promise<CachedEvent | null> => {
-        // Step 1: Check store
+        // Step 1: Check local store
         const existing = await backend.get(eventId);
         if (existing && !deletedIds.has(eventId)) {
           return {
@@ -221,10 +285,28 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         // Step 2: Negative cache
         if (negativeCache.has(eventId)) return null;
 
-        // Step 3: No rxNostr → can't fetch from relay
-        // (Full relay fetch implementation requires rx-nostr integration in sync layer)
+        // Step 3: Fetch from relay
+        const fetchFn = options?.fetch
+          ?? (options?.rxNostr
+            ? (id: string) => fetchFromRelay(options.rxNostr!, id, options.timeout ?? 5000, options.relayHint)
+            : null);
 
-        // Step 4: Register negative cache
+        if (fetchFn) {
+          const fetched = await fetchFn(eventId);
+          if (fetched) {
+            await store.add(fetched.event, { relay: fetched.relay });
+            const stored = await backend.get(eventId);
+            if (stored && !deletedIds.has(eventId)) {
+              return {
+                event: stored.event,
+                seenOn: stored.seenOn,
+                firstSeen: stored.firstSeen,
+              };
+            }
+          }
+        }
+
+        // Step 4: Not found → register negative cache
         if (options?.negativeTTL) {
           negativeCache.set(eventId, options.negativeTTL);
         }
