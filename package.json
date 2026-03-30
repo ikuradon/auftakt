@@ -22,6 +22,10 @@
       "types": "./dist/sync/index.d.ts",
       "import": "./dist/sync/index.js"
     },
+    "./backends/cached": {
+      "types": "./dist/backends/cached.d.ts",
+      "import": "./dist/backends/cached.js"
+    },
     "./adapters/svelte": {
       "types": "./dist/adapters/svelte.d.ts",
       "import": "./dist/adapters/svelte.js"
