@@ -56,6 +56,10 @@ connectStore(rxNostr, store, { reconcileDeletions: true });
 // Fetches kind:5 events for all cached event IDs (chunked by 50)
 ```
 
+## Deletion of Deletion Events
+
+Per NIP-09, deletion events (kind:5) **cannot be deleted by other kind:5 events**. This is a protocol violation. auftakt does not support this — a kind:5 event referencing another kind:5 via e-tag will have no effect on the referenced deletion.
+
 ## Tag Indexing
 
 All single-letter tags are indexed by default (NIP-01 compliant). Restrict with:

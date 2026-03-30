@@ -2,19 +2,41 @@ import type { Observable } from 'rxjs';
 import type { NostrEvent } from '../types.js';
 import type { EventStore } from '../core/store.js';
 
-interface PublishOptions {
-  signer?: any;
+/** Unsigned event parameters (signer required) */
+export interface UnsignedEventParams {
+  kind: number;
+  tags?: string[][];
+  content?: string;
+  created_at?: number;
+}
+
+/** Input to publishEvent: either a signed event or unsigned params */
+export type EventParams = NostrEvent | UnsignedEventParams;
+
+export interface PublishOptions {
+  signer?: unknown;
   optimistic?: boolean;
   on?: { relays?: string[] };
 }
 
+interface RxNostrSendLike {
+  send(params: EventParams, options?: Record<string, unknown>): Observable<unknown>;
+}
+
 export function publishEvent(
-  rxNostr: { send(params: any, options?: any): Observable<any> },
+  rxNostr: RxNostrSendLike,
   store: EventStore,
-  eventParams: any,
+  eventParams: EventParams,
   options?: PublishOptions,
-): Observable<any> {
-  if (options?.optimistic && eventParams.id && eventParams.sig) {
+): Observable<unknown> {
+  // If optimistic and event is pre-signed (has id+sig), add to store immediately
+  if (
+    options?.optimistic &&
+    'id' in eventParams &&
+    'sig' in eventParams &&
+    eventParams.id &&
+    eventParams.sig
+  ) {
     void store.add(eventParams as NostrEvent);
   }
 

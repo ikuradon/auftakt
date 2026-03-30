@@ -3,16 +3,19 @@ import type { NostrEvent } from '../types.js';
 import type { EventStore } from '../core/store.js';
 import { reconcileDeletions } from './deletion-reconcile.js';
 
+/** Minimal rx-nostr contract for connectStore */
+interface RxNostrFeedLike {
+  createAllEventObservable(): Observable<{ event: NostrEvent; from: string }>;
+  use?(rxReq: unknown, options?: unknown): Observable<unknown>;
+}
+
 interface ConnectStoreOptions {
   filter?: (event: NostrEvent, meta: { relay: string }) => boolean;
   reconcileDeletions?: boolean;
 }
 
 export function connectStore(
-  rxNostr: {
-    createAllEventObservable(): Observable<{ event: NostrEvent; from: string }>;
-    use?(rxReq: any, options?: any): Observable<any>;
-  },
+  rxNostr: RxNostrFeedLike,
   store: EventStore,
   options?: ConnectStoreOptions,
 ): () => void {
@@ -28,7 +31,7 @@ export function connectStore(
   });
 
   if (options?.reconcileDeletions && rxNostr.use) {
-    void reconcileDeletions(rxNostr as any, store);
+    void reconcileDeletions(rxNostr as Parameters<typeof reconcileDeletions>[0], store);
   }
 
   return () => {

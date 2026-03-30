@@ -1,5 +1,5 @@
 import { BehaviorSubject, Observable, Subscription } from 'rxjs';
-import type { CachedEvent, NostrFilter, SyncStatus } from '../types.js';
+import type { NostrEvent, CachedEvent, NostrFilter, SyncStatus } from '../types.js';
 import type { EventStore } from '../core/store.js';
 import { createSinceTracker } from './since-tracker.js';
 
@@ -17,8 +17,24 @@ interface SyncedQueryResult {
   dispose: () => void;
 }
 
-interface RxNostrLike {
-  use(rxReq: any, options?: any): Observable<any>;
+/** Minimal rx-nostr contract for SyncedQuery */
+export interface RxNostrLike {
+  use(rxReq: RxReqLike, options?: UseOptions): Observable<EventPacketLike>;
+}
+
+export interface RxReqLike {
+  strategy: 'backward' | 'forward';
+  rxReqId: string;
+  getReqPacketObservable(): Observable<unknown>;
+}
+
+interface UseOptions {
+  on?: { relays?: string[] };
+}
+
+interface EventPacketLike {
+  event: NostrEvent;
+  from: string;
 }
 
 // Shared backward REQ pool (module-level singleton)
@@ -29,9 +45,21 @@ interface PoolEntry {
   completed: boolean;
 }
 
+/**
+ * Module-level singleton pool for backward REQ deduplication.
+ * All createSyncedQuery instances share this pool.
+ *
+ * NOTE: If using multiple EventStore instances in the same process,
+ * queries with identical filters across different stores will share
+ * the same REQ. This is acceptable because connectStore() feeds
+ * events from rx-nostr to the specific store — the REQ itself just
+ * triggers relay responses that connectStore routes correctly.
+ *
+ * For tests: call _resetReqPool() in beforeEach to avoid cross-test leakage.
+ */
 const backwardReqPool = new Map<string, PoolEntry>();
 
-/** @internal Reset pool for testing */
+/** @internal Reset pool for testing. Call in beforeEach. */
 export function _resetReqPool(): void {
   for (const entry of backwardReqPool.values()) {
     entry.subscription.unsubscribe();
@@ -120,7 +148,7 @@ export function createSyncedQuery(
       backwardReqPool.set(hash, entry);
 
       rxReq.emit(adjustedFilter);
-      rxReq.over();
+      rxReq.over!();
     });
   }
 
@@ -241,36 +269,39 @@ export function createSyncedQuery(
 // Minimal RxReq mock factories for internal use
 // These create objects that rx-nostr's use() expects
 
-function createBackwardReq() {
-  let emitFn: ((f: any) => void) | null = null;
-  let overFn: (() => void) | null = null;
-  const reqPacketSubject = new BehaviorSubject<any>(null);
+interface InternalRxReq extends RxReqLike {
+  emit(filters: NostrFilter | NostrFilter[]): void;
+  over?(): void;
+}
+
+function createBackwardReq(): InternalRxReq {
+  const reqPacketSubject = new BehaviorSubject<unknown>(null);
 
   return {
     strategy: 'backward' as const,
     rxReqId: `auftakt-backward-${Date.now()}`,
-    emit(filters: any): void {
+    emit(filters: NostrFilter | NostrFilter[]): void {
       reqPacketSubject.next({ filters: Array.isArray(filters) ? filters : [filters] });
     },
     over(): void {
       reqPacketSubject.complete();
     },
-    getReqPacketObservable(): Observable<any> {
+    getReqPacketObservable(): Observable<unknown> {
       return reqPacketSubject.asObservable();
     },
   };
 }
 
-function createForwardReq() {
-  const reqPacketSubject = new BehaviorSubject<any>(null);
+function createForwardReq(): InternalRxReq {
+  const reqPacketSubject = new BehaviorSubject<unknown>(null);
 
   return {
     strategy: 'forward' as const,
     rxReqId: `auftakt-forward-${Date.now()}`,
-    emit(filters: any): void {
+    emit(filters: NostrFilter | NostrFilter[]): void {
       reqPacketSubject.next({ filters: Array.isArray(filters) ? filters : [filters] });
     },
-    getReqPacketObservable(): Observable<any> {
+    getReqPacketObservable(): Observable<unknown> {
       return reqPacketSubject.asObservable();
     },
   };

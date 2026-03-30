@@ -39,7 +39,7 @@ export interface FetchByIdOptions {
    */
   fetch?: (eventId: string) => Promise<{ event: NostrEvent; relay: string } | null>;
   /** @deprecated Use `fetch` instead. Kept for convenience — internally creates a oneshot REQ. */
-  rxNostr?: { use(req: any, options?: any): Observable<any> };
+  rxNostr?: { use(req: unknown, options?: unknown): Observable<{ event: NostrEvent; from: string }> };
   relayHint?: string;
   timeout?: number;
   negativeTTL?: number;
@@ -63,7 +63,7 @@ export interface EventStore {
 }
 
 function fetchFromRelay(
-  rxNostr: { use(req: any, options?: any): Observable<any> },
+  rxNostr: { use(req: unknown, options?: unknown): Observable<{ event: NostrEvent; from: string }> },
   eventId: string,
   timeout: number,
   relayHint?: string,

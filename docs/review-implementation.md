@@ -5,6 +5,86 @@
 
 ---
 
+## 0. 第2版レビュー (修正後)
+
+### §1 ブロッカーの修正状況
+
+| # | 指摘 | 状態 | 検証 |
+|---|------|------|------|
+| 1.1 | `seenOn` 直接ミューテーション | ✅ 修正済 | `{ ...existing, seenOn: [...existing.seenOn, meta.relay] }` でイミュータブル化。正しい |
+| 1.2 | IDB タグクエリが最初の値のみ | ✅ 修正済 | 全値をループで `getAll()` → dedup。正しい |
+| 1.3 | QueryManager flush unhandled rejection | ✅ 修正済 | `.catch()` 追加。正しい |
+| 1.4 | deletion-reconcile 二重 resolve | ✅ 修正済 | `done` フラグ + `clearTimeout` + `finish()` 関数。正しい |
+
+### その他の修正
+
+| 指摘 | 状態 | 検証 |
+|------|------|------|
+| §2.1 `store.dispose()` 未実装 | ✅ 修正済 | `changeSubject.complete()` + `inflight.clear()` |
+| §2.3 kind:5 e-tag 逐次処理 | ✅ 修正済 | `Promise.all` で並列化 |
+| §2.5 NegativeCache サイズ上限なし | ✅ 修正済 | 10000件超で期限切れエントリ削除 |
+| §3.1 memory.ts 二重タグチェック | ✅ 修正済 | 独自タグチェック削除、`matchesFilter()` に統一 |
+| §3.2 snapshot バリデーション | ✅ 修正済 | `event.id` / `event.kind` 存在チェック追加 |
+| tag-index-config テスト修正 | ✅ | `indexedTags` は `_tag_index` のみ制限、クエリは `matchesFilter()` で全タグ対応と明確化 |
+
+**全ブロッカー解消。ビルド成功、テスト 172/172 pass。**
+
+### 残課題（前回レビューから変更なし、リリースブロッカーではない）
+
+| 優先度 | 項目 | 状態 |
+|--------|------|------|
+| P2 | `publishEvent` の型安全性 (`any` 汚染) | 未着手 |
+| P2 | `RxNostrLike` の `any` 型 | 未着手 |
+| P2 | `dispose()` で queryManager のクリーンアップ | `changeSubject.complete()` のみ。queries Map のクリアは未実装 |
+| P2 | `store.delete(eventId)` API | 未実装 |
+| P2 | `store.getById(eventId)` 同期版 | 未実装 |
+| P3 | IDB マイグレーションフレームワーク | 未実装 |
+| P3 | `store.count(filter)` | 未実装 |
+| P3 | Backend error callback | 未実装 |
+
+### 新たに気づいた点
+
+#### `dispose()` で queries のクリーンアップが不足
+
+```typescript
+dispose(): void {
+  changeSubject.complete();
+  inflight.clear();
+},
+```
+
+`queryManager` の全クエリを unregister していない。`store.query()` の subscriber は `changeSubject` の complete では通知されない（別の Subject）。Store dispose 後も `query()` の Observable が生き続ける。
+
+**修正案:** QueryManager に `disposeAll()` を追加し、全クエリの Subject を complete する:
+```typescript
+dispose(): void {
+  changeSubject.complete();
+  queryManager.disposeAll();
+  inflight.clear();
+},
+```
+
+#### IDB タグクエリ修正の性能考慮
+
+```typescript
+for (const v of values) {
+  const partial = await idbRequest(index.getAll(`${tagName}:${v}`));
+  allResults.push(...partial);
+}
+```
+
+値が多い場合（例: `{ '#p': [100人のpubkey] }`）、100回の逐次 `getAll()` になる。IDB の `getAll()` はトランザクション内なのでブロッキングではないが、1トランザクション内で逐次なので遅い可能性がある。
+
+**現時点ではブロッカーではない。** Resonote の典型クエリは `#I` が1-2値なので問題ない。多値クエリが必要になった場合、`Promise.all` 化か full scan フォールバックを検討。
+
+### 総合評価
+
+**リリース可能。** §1 のブロッカー4件は全て正しく修正された。追加の修正（dispose, snapshot, negative cache, memory backend タグチェック、kind:5 並列化）も適切。
+
+v0.0.1 として publish し、Resonote への統合パイロットを開始できる状態。
+
+---
+
 ## 1. Critical Bugs (リリース前に修正必須)
 
 ### 1.1 [BUG] `seenOn` 配列の直接ミューテーション
