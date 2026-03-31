@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, Subscription } from 'rxjs';
+import { BehaviorSubject, Observable, Subject, Subscription } from 'rxjs';
 import type { NostrEvent, CachedEvent, NostrFilter, SyncStatus } from '../types.js';
 import type { EventStore } from '../core/store.js';
 import { createSinceTracker } from './since-tracker.js';
@@ -288,7 +288,9 @@ interface InternalRxReq extends RxReqLike {
 }
 
 function createBackwardReq(): InternalRxReq {
-  const reqPacketSubject = new BehaviorSubject<unknown>(null);
+  // Use Subject (not BehaviorSubject) to avoid emitting null on subscribe.
+  // rx-nostr destructures { filters } from the packet — null causes TypeError.
+  const reqPacketSubject = new Subject<unknown>();
 
   return {
     strategy: 'backward' as const,
@@ -306,7 +308,8 @@ function createBackwardReq(): InternalRxReq {
 }
 
 function createForwardReq(): InternalRxReq {
-  const reqPacketSubject = new BehaviorSubject<unknown>(null);
+  // Use Subject (not BehaviorSubject) to avoid emitting null on subscribe.
+  const reqPacketSubject = new Subject<unknown>();
 
   return {
     strategy: 'forward' as const,
