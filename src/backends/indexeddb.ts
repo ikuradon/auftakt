@@ -1,7 +1,11 @@
 import type { NostrFilter } from '../types.js';
 import type { StorageBackend, StoredEvent } from './interface.js';
 import { matchesFilter } from '../core/filter-matcher.js';
-import { memoryBackend as memoryBackendFallback } from './memory.js';
+// Dynamic import to avoid bundling memory.js when indexedDB is available
+async function loadMemoryFallback(): Promise<StorageBackend> {
+  const { memoryBackend } = await import('./memory.js');
+  return memoryBackend();
+}
 
 const DB_VERSION = 2;
 
@@ -44,9 +48,24 @@ export function indexedDBBackend(
   dbName: string,
   options?: IndexedDBBackendOptions,
 ): StorageBackend {
-  // SSR fallback: when indexedDB is not available, use memory backend
+  // SSR fallback: when indexedDB is not available, lazily load memory backend.
+  // Dynamic import avoids bundling memory.js when indexedDB is available.
   if (typeof indexedDB === 'undefined') {
-    return memoryBackendFallback();
+    let fallback: StorageBackend | null = null;
+    const getFallback = async (): Promise<StorageBackend> => {
+      if (!fallback) fallback = await loadMemoryFallback();
+      return fallback;
+    };
+    return {
+      async put(stored) { return (await getFallback()).put(stored); },
+      async get(eventId) { return (await getFallback()).get(eventId); },
+      async getByReplaceableKey(kind, pubkey) { return (await getFallback()).getByReplaceableKey(kind, pubkey); },
+      async getByAddressableKey(kind, pubkey, dTag) { return (await getFallback()).getByAddressableKey(kind, pubkey, dTag); },
+      async query(filter) { return (await getFallback()).query(filter); },
+      async delete(eventId) { return (await getFallback()).delete(eventId); },
+      async getAllEventIds() { return (await getFallback()).getAllEventIds(); },
+      async clear() { return (await getFallback()).clear(); },
+    };
   }
 
   let dbPromise: Promise<IDBDatabase> | null = null;
