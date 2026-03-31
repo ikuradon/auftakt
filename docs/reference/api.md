@@ -211,57 +211,119 @@ Based on last backward REQ completion time (memory-only, resets on page reload).
 3. Completes `events$` and `status$`
 4. `emit()` after dispose is no-op
 
-# publishEvent
+# sendEvent
 
 ```typescript
-import { publishEvent } from '@ikuradon/auftakt/sync';
+import { sendEvent } from '@ikuradon/auftakt/sync';
 ```
 
-## `publishEvent(rxNostr, store, eventParams, options?)`
+## `sendEvent(rxNostr, store, eventParams, options?)`
 
-Publishes an event via rx-nostr with optional optimistic store update.
+Sign (if needed) and send an event via rx-nostr. Returns an Observable of relay OK responses.
 
 ### Parameters
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `rxNostr` | `{ send() }` | rx-nostr instance |
+| `rxNostr` | `RxNostrSendLike` | rx-nostr instance (needs `send()`) |
 | `store` | `EventStore` | Event store |
-| `eventParams` | `EventParameters \| NostrEvent` | Event to publish. If signed (has `id` + `sig`), signer is optional. |
-| `options` | `PublishOptions` | Optional configuration |
+| `eventParams` | `EventParams` | Signed `NostrEvent` or unsigned `UnsignedEventParams` |
+| `options` | `SendOptions` | Optional configuration |
 
 ### Options
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `signer` | `EventSigner` | `undefined` | Signer for unsigned events. Optional if event is pre-signed. |
-| `optimistic` | `boolean` | `false` | Add to store immediately before relay confirmation |
+| `signer` | `EventSigner` | `undefined` | Required for unsigned events. `(params) => Promise<NostrEvent>` |
+| `optimistic` | `boolean` | `false` | Add to store immediately after signing, before relay confirmation |
 | `on` | `{ relays?: string[] }` | `undefined` | Relay targeting |
 
 ### Returns
 
-`Observable<OkPacketAgainstEvent>` — rx-nostr's send() result.
+`Observable<OkPacketLike>` — each relay's OK/NG response (`{ ok: boolean; from: string }`).
 
 ### Example
 
 ```typescript
-// Unsigned event
-const ok$ = publishEvent(rxNostr, store, eventParams, {
-  signer: nip07Signer(),
-  optimistic: true,
+// Pre-signed event
+sendEvent(rxNostr, store, signedEvent, { optimistic: true }).subscribe((pkt) => {
+  console.log(`${pkt.from}: ${pkt.ok ? 'ok' : 'failed'}`);
 });
 
-// Pre-signed event
-const ok$ = publishEvent(rxNostr, store, signedEvent, {
+// Unsigned event — signer signs it before sending
+sendEvent(rxNostr, store, { kind: 1, content: 'Hello!' }, {
+  signer: nip07Signer(),
+  optimistic: true,
+}).subscribe();
+```
+
+### Signing Flow
+
+1. Signed event (`id` + `sig` present) → used as-is
+2. Unsigned event → `signer(params)` called → signed event obtained
+3. If `optimistic: true` → `store.add(signedEvent)` before send
+4. `rxNostr.send(signedEvent)` called
+
+If signer fails or is missing for unsigned events, `SigningError` is thrown.
+
+# castEvent
+
+```typescript
+import { castEvent } from '@ikuradon/auftakt/sync';
+```
+
+## `castEvent(rxNostr, store, eventParams, options?)`
+
+Sign (if needed) and cast an event via rx-nostr. Returns a Promise that resolves when at least one relay accepts.
+
+### Parameters
+
+Same as `sendEvent`, but `rxNostr` must have `cast()` (`RxNostrCastLike`).
+
+### Returns
+
+`Promise<void>` — resolves when at least one relay receives the event.
+
+### Example
+
+```typescript
+// Fire and forget
+await castEvent(rxNostr, store, signedEvent);
+
+// With signing + optimistic
+await castEvent(rxNostr, store, { kind: 1, content: 'Hello!' }, {
+  signer: nip07Signer(),
   optimistic: true,
 });
 ```
 
-### Optimistic Update
+### When to use send vs cast
 
-When `optimistic: true` and the event has `id` + `sig`, it's added to the store immediately. Reactive queries reflect it before relay confirmation.
+| | `sendEvent` | `castEvent` |
+|---|---|---|
+| Return | `Observable<OkPacketLike>` | `Promise<void>` |
+| Relay feedback | Per-relay OK/NG | At least one relay reached |
+| Use case | UI showing per-relay status | Fire-and-forget, quick publish |
 
-No automatic rollback in current version. Relay rejection results are available via the returned `ok$` Observable.
+# SigningError
+
+```typescript
+import { SigningError } from '@ikuradon/auftakt/sync';
+```
+
+Thrown when:
+- Unsigned event is passed without a `signer`
+- The `signer` function throws an error
+
+```typescript
+try {
+  await castEvent(rxNostr, store, unsignedEvent, { signer });
+} catch (err) {
+  if (err instanceof SigningError) {
+    console.error('Signing failed:', err.cause);
+  }
+}
+```
 
 # Backends API
 

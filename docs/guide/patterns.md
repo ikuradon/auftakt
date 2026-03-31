@@ -102,16 +102,20 @@ await loadSnapshot(store, { key: 'auftakt-cache' });
 イベントをリレー確認前にストアに追加:
 
 ```typescript
-import { publishEvent } from '@ikuradon/auftakt/sync';
+import { sendEvent, castEvent } from '@ikuradon/auftakt/sync';
 
-const ok$ = publishEvent(rxNostr, store, signedEvent, {
-  optimistic: true, // 即座にストアに追加
+// send: 各リレーの OK/NG を受け取る
+sendEvent(rxNostr, store, signedEvent, {
+  optimistic: true,
+}).subscribe((pkt) => {
+  if (!pkt.ok) {
+    console.warn(`${pkt.from} が拒否`);
+  }
 });
 
-ok$.subscribe((result) => {
-  if (!result.ok) {
-    console.warn('リレーが拒否:', result.notice);
-  }
+// cast: 少なくとも1つのリレーに到達したら完了
+await castEvent(rxNostr, store, signedEvent, {
+  optimistic: true,
 });
 ```
 

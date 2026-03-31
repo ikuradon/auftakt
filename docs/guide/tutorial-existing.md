@@ -181,7 +181,7 @@ const events = await store.getSync({ kinds: [1], '#e': [targetId] });
 | backward → forward の手動切り替え | `createSyncedQuery({ strategy: 'dual' })` |
 | `Map<string, Event>` による重複排除 | 削除（ストアが自動処理） |
 | kind 別の手動振り分けロジック | 削除（`store.add()` が NIP セマンティクスを処理） |
-| `rxNostr.send()` + 手動ストア更新 | `publishEvent(rxNostr, store, event, { optimistic: true })` |
+| `rxNostr.send()` + 手動ストア更新 | `sendEvent(rxNostr, store, event, { optimistic: true })` or `castEvent(...)` |
 
 ## Step 6: 後片付けの整理
 

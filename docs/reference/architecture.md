@@ -21,7 +21,7 @@ rx-nostr ───────────────────────�
 | `connectStore()` | Feeds all rx-nostr events into the store | Yes (fire-and-forget) |
 | `createSyncedQuery()` | Manages REQ lifecycle + reactive queries | No (depends on connectStore) |
 | `store.fetchById()` | Single event fetch with relay fallback | Yes (self-contained) |
-| `publishEvent()` | Publishes events with optimistic update | Yes (when optimistic) |
+| `sendEvent()` / `castEvent()` | Sign + send/cast events with optimistic update | Yes (when optimistic) |
 
 ## Internal Modules
 
@@ -44,7 +44,7 @@ src/
 │   ├── global-feed.ts        # connectStore + reconcileDeletions + filter mismatch warn
 │   ├── deletion-reconcile.ts # Startup kind:5 integrity check
 │   ├── since-tracker.ts      # Latest cached timestamp for since adjustment
-│   └── publish.ts            # publishEvent with optimistic store update
+│   └── publish.ts            # sendEvent / castEvent with signing + optimistic store
 └── adapters/
     └── svelte.ts             # Svelte readable store adapter
 ```
