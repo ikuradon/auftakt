@@ -52,6 +52,8 @@ export interface EventStore {
   fetchById(eventId: string, options?: FetchByIdOptions): Promise<CachedEvent | null>;
   /** Non-reactive snapshot query. Returns a Promise of CachedEvent[]. */
   getSync(filter: NostrFilter): Promise<CachedEvent[]>;
+  /** Explicitly delete an event by ID. Marks as deleted, removes from backend, notifies queries. */
+  delete(eventId: string): Promise<void>;
   /** Dispose the store: completes changes$, unregisters all queries. */
   dispose(): void;
   /** Get all event IDs stored in the backend. Used by reconcileDeletions. */
@@ -426,6 +428,16 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         .sort((a, b) => b.event.created_at - a.event.created_at)
         .slice(0, filter.limit ?? Infinity)
         .map((s) => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
+    },
+
+    async delete(eventId: string): Promise<void> {
+      deletedIds.add(eventId);
+      const stored = await backend.get(eventId);
+      await backend.delete(eventId);
+      if (stored) {
+        changeSubject.next({ event: stored.event, type: 'deleted' });
+        queryManager.notifyDeletion(stored);
+      }
     },
 
     dispose(): void {
