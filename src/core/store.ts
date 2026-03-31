@@ -139,13 +139,13 @@ export function createEventStore(options: EventStoreOptions): EventStore {
   const maxEventSize = options.maxEventSize;
 
   function validateEvent(event: NostrEvent): boolean {
-    if (typeof event.id !== 'string') return false;
-    if (typeof event.pubkey !== 'string') return false;
+    if (typeof event.id !== 'string' || !event.id) return false;
+    if (typeof event.pubkey !== 'string' || !event.pubkey) return false;
     if (typeof event.kind !== 'number' || !Number.isInteger(event.kind)) return false;
-    if (typeof event.created_at !== 'number') return false;
+    if (typeof event.created_at !== 'number' || !Number.isFinite(event.created_at)) return false;
     if (!Array.isArray(event.tags)) return false;
     if (typeof event.content !== 'string') return false;
-    if (typeof event.sig !== 'string') return false;
+    if (typeof event.sig !== 'string' || !event.sig) return false;
     if (maxEventSize !== undefined && JSON.stringify(event).length > maxEventSize) return false;
     return true;
   }
@@ -177,6 +177,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       if (existing) {
         if (existing.event.pubkey === event.pubkey) {
           deletedIds.add(targetId);
+          await backend.delete(targetId);
           changeSubject.next({ event: existing.event, type: 'deleted' });
           queryManager.notifyDeletion(existing);
         }
@@ -196,6 +197,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       const existing = await backend.getByAddressableKey(kind, pubkey, dTag);
       if (existing && existing.event.created_at <= event.created_at) {
         deletedIds.add(existing.event.id);
+        await backend.delete(existing.event.id);
         changeSubject.next({ event: existing.event, type: 'deleted' });
         queryManager.notifyDeletion(existing);
       }
@@ -311,6 +313,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       // Step 8: Check pending deletions
       const wasDeleted = checkPendingDeletions(event);
       if (wasDeleted) {
+        await backend.delete(event.id);
         changeSubject.next({ event, type: 'deleted', relay: meta?.relay });
         queryManager.notifyDeletion(stored);
         cleanPendingDeletions();

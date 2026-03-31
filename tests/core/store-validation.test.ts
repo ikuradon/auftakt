@@ -61,6 +61,31 @@ describe('store.add() validation', () => {
     expect(result).toBe('rejected');
   });
 
+  it('rejects event with NaN created_at', async () => {
+    const result = await store.add({ ...makeEvent(), created_at: NaN });
+    expect(result).toBe('rejected');
+  });
+
+  it('rejects event with Infinity created_at', async () => {
+    const result = await store.add({ ...makeEvent(), created_at: Infinity });
+    expect(result).toBe('rejected');
+  });
+
+  it('rejects event with empty string id', async () => {
+    const result = await store.add({ ...makeEvent(), id: '' });
+    expect(result).toBe('rejected');
+  });
+
+  it('rejects event with empty string pubkey', async () => {
+    const result = await store.add({ ...makeEvent(), pubkey: '' });
+    expect(result).toBe('rejected');
+  });
+
+  it('rejects event with empty string sig', async () => {
+    const result = await store.add({ ...makeEvent(), sig: '' });
+    expect(result).toBe('rejected');
+  });
+
   it('accepts valid event', async () => {
     const result = await store.add(makeEvent());
     expect(result).toBe('added');

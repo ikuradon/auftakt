@@ -109,6 +109,39 @@ describe('memoryBackend indexed query', () => {
     expect(results).toHaveLength(0);
   });
 
+  it('queries by author prefix (NIP-01)', async () => {
+    await backend.put(
+      makeStored({
+        event: {
+          id: 'a',
+          pubkey: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+        },
+      }),
+    );
+    await backend.put(makeStored({ event: { id: 'b', pubkey: 'xxxxxx' } }));
+
+    const results = await backend.query({ authors: ['abcdef'] });
+    expect(results).toHaveLength(1);
+    expect(results[0].event.id).toBe('a');
+  });
+
+  it('queries by kinds + author prefix (intersection)', async () => {
+    await backend.put(
+      makeStored({
+        event: {
+          id: 'a',
+          kind: 1,
+          pubkey: 'abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+        },
+      }),
+    );
+    await backend.put(makeStored({ event: { id: 'b', kind: 1, pubkey: 'xxxxxx' } }));
+
+    const results = await backend.query({ kinds: [1], authors: ['abcdef'] });
+    expect(results).toHaveLength(1);
+    expect(results[0].event.id).toBe('a');
+  });
+
   it('handles overwrite of same event id', async () => {
     await backend.put(makeStored({ event: { id: 'a', kind: 1, pubkey: 'pk1' } }));
     // Overwrite with different seenOn

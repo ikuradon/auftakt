@@ -191,8 +191,10 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
 
       const hasKinds = filter.kinds && filter.kinds.length > 0;
       const hasAuthors = filter.authors && filter.authors.length > 0;
+      // NIP-01: authors with < 64 chars are prefix matches — can't use exact-key index
+      const authorsHasPrefix = hasAuthors && filter.authors!.some((a) => a.length < 64);
 
-      if (hasKinds && hasAuthors) {
+      if (hasKinds && hasAuthors && !authorsHasPrefix) {
         const kindCandidates = new Set<string>();
         for (const k of filter.kinds!) {
           const set = byKind.get(k);
@@ -208,13 +210,14 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
         }
         candidateIds = intersected;
       } else if (hasKinds) {
+        // kinds are always exact match — index is safe
         const union: string[] = [];
         for (const k of filter.kinds!) {
           const set = byKind.get(k);
           if (set) for (const id of set) union.push(id);
         }
         candidateIds = union;
-      } else if (hasAuthors) {
+      } else if (hasAuthors && !authorsHasPrefix) {
         const union: string[] = [];
         for (const a of filter.authors!) {
           const set = byAuthor.get(a);
@@ -222,6 +225,7 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
         }
         candidateIds = union;
       } else {
+        // Full scan: no usable index, or prefix authors without kinds
         candidateIds = byId.keys();
       }
 
