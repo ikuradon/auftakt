@@ -8,6 +8,7 @@ interface SyncedQueryOptions {
   strategy: 'backward' | 'forward' | 'dual';
   on?: { relays?: string[] };
   staleTime?: number;
+  signal?: AbortSignal;
 }
 
 interface SyncedQueryResult {
@@ -239,9 +240,28 @@ export function createSyncedQuery(
 
   // Initialize
   let currentFilter = options.filter;
-  checkFilterMismatch(currentFilter);
-  setupStoreQuery(currentFilter);
-  startStrategy(currentFilter);
+
+  function doDispose(): void {
+    if (disposed) return;
+    disposed = true;
+    cleanupSubscriptions();
+    querySubscription?.unsubscribe();
+    eventsSubject.complete();
+    statusSubject.complete();
+  }
+
+  // AbortSignal support
+  if (options.signal?.aborted) {
+    doDispose();
+  } else if (options.signal) {
+    options.signal.addEventListener('abort', () => doDispose(), { once: true });
+  }
+
+  if (!disposed) {
+    checkFilterMismatch(currentFilter);
+    setupStoreQuery(currentFilter);
+    startStrategy(currentFilter);
+  }
 
   return {
     events$: eventsSubject.asObservable(),
@@ -255,14 +275,7 @@ export function createSyncedQuery(
       startStrategy(filter);
     },
 
-    dispose(): void {
-      if (disposed) return;
-      disposed = true;
-      cleanupSubscriptions();
-      querySubscription?.unsubscribe();
-      eventsSubject.complete();
-      statusSubject.complete();
-    },
+    dispose: doDispose,
   };
 }
 

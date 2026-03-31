@@ -41,6 +41,7 @@ export interface FetchByIdOptions {
   relayHint?: string;
   timeout?: number;
   negativeTTL?: number;
+  signal?: AbortSignal;
 }
 
 export type ConnectStoreFilter = (event: NostrEvent, meta: { relay: string }) => boolean;
@@ -332,12 +333,19 @@ export function createEventStore(options: EventStoreOptions): EventStore {
     },
 
     async fetchById(eventId: string, options?: FetchByIdOptions): Promise<CachedEvent | null> {
-      // Step 0: In-flight dedup
+      const signal = options?.signal;
+
+      // Step 0: Check if already aborted
+      if (signal?.aborted) {
+        throw new DOMException('Aborted', 'AbortError');
+      }
+
+      // Step 0.5: In-flight dedup
       const pending = inflight.get(eventId);
       if (pending) return pending;
 
       const promise = (async (): Promise<CachedEvent | null> => {
-        // Step 1: Check local store
+        // Step 1: Check local store (cache hit — return regardless of signal)
         const existing = await backend.get(eventId);
         if (existing && !deletedIds.has(eventId)) {
           return {
@@ -350,6 +358,11 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         // Step 2: Negative cache
         if (negativeCache.has(eventId)) return null;
 
+        // Step 2.5: Check abort before relay fetch
+        if (signal?.aborted) {
+          throw new DOMException('Aborted', 'AbortError');
+        }
+
         // Step 3: Fetch from relay
         const fetchFn =
           options?.fetch ??
@@ -359,7 +372,20 @@ export function createEventStore(options: EventStoreOptions): EventStore {
             : null);
 
         if (fetchFn) {
-          const fetched = await fetchFn(eventId);
+          const fetched = await Promise.race([
+            fetchFn(eventId),
+            ...(signal
+              ? [
+                  new Promise<never>((_, reject) => {
+                    signal.addEventListener(
+                      'abort',
+                      () => reject(new DOMException('Aborted', 'AbortError')),
+                      { once: true },
+                    );
+                  }),
+                ]
+              : []),
+          ]);
           if (fetched) {
             await store.add(fetched.event, { relay: fetched.relay });
             const stored = await backend.get(eventId);
