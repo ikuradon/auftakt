@@ -57,14 +57,30 @@ export function indexedDBBackend(
       return fallback;
     };
     return {
-      async put(stored) { return (await getFallback()).put(stored); },
-      async get(eventId) { return (await getFallback()).get(eventId); },
-      async getByReplaceableKey(kind, pubkey) { return (await getFallback()).getByReplaceableKey(kind, pubkey); },
-      async getByAddressableKey(kind, pubkey, dTag) { return (await getFallback()).getByAddressableKey(kind, pubkey, dTag); },
-      async query(filter) { return (await getFallback()).query(filter); },
-      async delete(eventId) { return (await getFallback()).delete(eventId); },
-      async getAllEventIds() { return (await getFallback()).getAllEventIds(); },
-      async clear() { return (await getFallback()).clear(); },
+      async put(stored) {
+        return (await getFallback()).put(stored);
+      },
+      async get(eventId) {
+        return (await getFallback()).get(eventId);
+      },
+      async getByReplaceableKey(kind, pubkey) {
+        return (await getFallback()).getByReplaceableKey(kind, pubkey);
+      },
+      async getByAddressableKey(kind, pubkey, dTag) {
+        return (await getFallback()).getByAddressableKey(kind, pubkey, dTag);
+      },
+      async query(filter) {
+        return (await getFallback()).query(filter);
+      },
+      async delete(eventId) {
+        return (await getFallback()).delete(eventId);
+      },
+      async getAllEventIds() {
+        return (await getFallback()).getAllEventIds();
+      },
+      async clear() {
+        return (await getFallback()).clear();
+      },
     };
   }
 

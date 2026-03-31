@@ -435,9 +435,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
     async count(filter: NostrFilter): Promise<number> {
       const results = await backend.query({ ...filter, limit: undefined });
       const now = Math.floor(Date.now() / 1000);
-      return results.filter(
-        (s) => !deletedIds.has(s.event.id) && !isExpired(s.event, now),
-      ).length;
+      return results.filter((s) => !deletedIds.has(s.event.id) && !isExpired(s.event, now)).length;
     },
 
     async delete(eventId: string): Promise<void> {

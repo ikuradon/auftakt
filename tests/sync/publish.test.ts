@@ -65,12 +65,25 @@ describe('publishEvent', () => {
     const store = createEventStore({ backend: memoryBackend() });
 
     const signer = async (params: { kind: number }) =>
-      ({ ...params, id: 'x', pubkey: 'pk', sig: 's', created_at: 0, tags: [], content: '' }) as NostrEvent;
+      ({
+        ...params,
+        id: 'x',
+        pubkey: 'pk',
+        sig: 's',
+        created_at: 0,
+        tags: [],
+        content: '',
+      }) as NostrEvent;
 
-    publishEvent(mockRxNostr, store, { kind: 1, tags: [], content: '' }, {
-      signer,
-      on: { relays: ['wss://relay1'] },
-    });
+    publishEvent(
+      mockRxNostr,
+      store,
+      { kind: 1, tags: [], content: '' },
+      {
+        signer,
+        on: { relays: ['wss://relay1'] },
+      },
+    );
 
     expect(mockRxNostr.send).toHaveBeenCalledWith(
       { kind: 1, tags: [], content: '' },

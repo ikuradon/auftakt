@@ -20,10 +20,11 @@ describe('store.fetchById with AbortSignal', () => {
     const controller = new AbortController();
 
     const fetchFn = vi.fn(
-      () => new Promise<{ event: NostrEvent; relay: string } | null>((resolve) => {
-        // Simulate slow relay
-        setTimeout(() => resolve({ event: makeEvent(), relay: 'wss://relay1' }), 5000);
-      }),
+      () =>
+        new Promise<{ event: NostrEvent; relay: string } | null>((resolve) => {
+          // Simulate slow relay
+          setTimeout(() => resolve({ event: makeEvent(), relay: 'wss://relay1' }), 5000);
+        }),
     );
 
     const promise = store.fetchById('e1', {
