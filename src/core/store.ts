@@ -52,6 +52,8 @@ export interface EventStore {
   fetchById(eventId: string, options?: FetchByIdOptions): Promise<CachedEvent | null>;
   /** Non-reactive snapshot query. Returns a Promise of CachedEvent[]. */
   getSync(filter: NostrFilter): Promise<CachedEvent[]>;
+  /** Count events matching a filter without loading them. Ignores limit. */
+  count(filter: NostrFilter): Promise<number>;
   /** Explicitly delete an event by ID. Marks as deleted, removes from backend, notifies queries. */
   delete(eventId: string): Promise<void>;
   /** Dispose the store: completes changes$, unregisters all queries. */
@@ -428,6 +430,14 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         .sort((a, b) => b.event.created_at - a.event.created_at)
         .slice(0, filter.limit ?? Infinity)
         .map((s) => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
+    },
+
+    async count(filter: NostrFilter): Promise<number> {
+      const results = await backend.query({ ...filter, limit: undefined });
+      const now = Math.floor(Date.now() / 1000);
+      return results.filter(
+        (s) => !deletedIds.has(s.event.id) && !isExpired(s.event, now),
+      ).length;
     },
 
     async delete(eventId: string): Promise<void> {
