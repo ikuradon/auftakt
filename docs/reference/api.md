@@ -211,6 +211,85 @@ Based on last backward REQ completion time (memory-only, resets on page reload).
 3. Completes `events$` and `status$`
 4. `emit()` after dispose is no-op
 
+# fetchLatestBatch
+
+```typescript
+import { fetchLatestBatch } from '@ikuradon/auftakt/sync';
+```
+
+## `fetchLatestBatch(rxNostr, store, pubkeys, kind, options?)`
+
+複数 pubkey の replaceable event を単一の backward REQ で取得します。`Promise.all` + N 個の個別 REQ の代替。
+
+### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `rxNostr` | `RxNostrLike` | rx-nostr instance |
+| `store` | `EventStore` | Event store |
+| `pubkeys` | `string[]` | 取得対象の pubkey 配列 |
+| `kind` | `number` | 取得対象の kind（通常 0 = プロフィール） |
+| `options` | `FetchLatestBatchOptions` | Optional configuration |
+
+### Options
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `on` | `{ relays?: string[] }` | `undefined` | Relay targeting |
+| `timeout` | `number` | `10000` | Timeout in ms |
+| `signal` | `AbortSignal` | `undefined` | Abort signal |
+
+### Returns
+
+`Promise<CachedEvent[]>` — 取得したイベントの配列。
+
+### Example
+
+```typescript
+// 50 pubkey のプロフィールを 1 REQ で取得
+const profiles = await fetchLatestBatch(rxNostr, store, pubkeys, 0, {
+  timeout: 15_000,
+});
+```
+
+### Notes
+
+- 空の `pubkeys` に対しては即座に `[]` を返します
+- 内部で `createSyncedQuery({ strategy: 'backward' })` を使用
+- `status$ 'complete'` 後に `events$` から結果を取得（P1 レース条件修正済み）
+- タイムアウトまたは abort 時にはエラーをスロー
+
+# reconcileDeletions
+
+```typescript
+import { reconcileDeletions } from '@ikuradon/auftakt/sync';
+```
+
+## `reconcileDeletions(rxNostr, store, eventIds?, options?)`
+
+キャッシュ済みイベント ID に対する kind:5 削除イベントをリレーから取得し、ストアに適用します。
+
+### Options
+
+| Property | Type | Default | Description |
+|----------|------|---------|-------------|
+| `maxEventIds` | `number` | `10000` | チェック対象の最大イベント数（超過時は末尾から切り出し） |
+| `concurrency` | `number` | `5` | 同時実行チャンク数の上限 |
+
+### Example
+
+```typescript
+// connectStore 経由で自動実行（デフォルト設定で十分）
+connectStore(rxNostr, store, { reconcileDeletions: true });
+
+// 手動実行（カスタム設定）
+const ids = await store.getAllEventIds();
+await reconcileDeletions(rxNostr, store, ids, {
+  maxEventIds: 5000,
+  concurrency: 3,
+});
+```
+
 # sendEvent
 
 ```typescript
@@ -338,9 +417,18 @@ interface StorageBackend {
   getByReplaceableKey(kind: number, pubkey: string): Promise<StoredEvent | null>;
   getByAddressableKey(kind: number, pubkey: string, dTag: string): Promise<StoredEvent | null>;
   query(filter: NostrFilter): Promise<StoredEvent[]>;
+  count(filter: NostrFilter): Promise<number>;
   delete(eventId: string): Promise<void>;
   getAllEventIds(): Promise<string[]>;
   clear(): Promise<void>;
+  markDeleted(eventId: string, deletedBy: string, deletedAt: number): Promise<void>;
+  isDeleted(eventId: string, pubkey?: string): Promise<boolean>;
+  markReplaceDeletion(aTagHash: string, deletedBy: string, deletedAt: number): Promise<void>;
+  getReplaceDeletion(aTagHash: string): Promise<ReplaceDeletionRecord | null>;
+  setNegative(eventId: string, ttl: number): Promise<void>;
+  isNegative(eventId: string): Promise<boolean>;
+  cleanExpiredNegative(): Promise<void>;
+  dispose?(): Promise<void>;
 }
 ```
 
@@ -394,7 +482,7 @@ interface CachedEvent {
 type AddResult =
   | 'added'      // New event stored
   | 'replaced'   // Replaceable/Addressable event updated
-  | 'deleted'    // Event was in deletedIds (step 1.5) or pendingDeletions (step 8)
+  | 'deleted'    // Event matched a persistent deletion record (backend.isDeleted / getReplaceDeletion)
   | 'duplicate'  // Same event.id already exists
   | 'expired'    // NIP-40 expiration tag in the past
   | 'ephemeral'  // Kind 20000-29999, not stored

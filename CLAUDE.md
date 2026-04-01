@@ -83,7 +83,7 @@ src/
 
 ## テスト
 
-- 304テスト、36テストファイル
+- 314テスト、38テストファイル
 - カバレッジ閾値: 80%（statements, branches, functions, lines）
 - `fake-indexeddb/auto` — IndexedDBテスト
 - `@ikuradon/tsunagiya` — リレーモック統合テスト
