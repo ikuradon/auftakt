@@ -139,7 +139,6 @@ export function createSyncedQuery(
       })
       .catch(() => {
         if (!disposed) {
-          statusSubject.next('complete');
           onComplete();
         }
       });
@@ -193,10 +192,10 @@ export function createSyncedQuery(
     } else if (strategy === 'dual') {
       if (isStale()) {
         statusSubject.next('fetching');
+        startForward(filter);
         startBackward(filter, () => {
           if (!disposed) {
             statusSubject.next('live');
-            startForward(filter);
           }
         });
       } else {

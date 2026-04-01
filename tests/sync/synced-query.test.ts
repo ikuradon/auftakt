@@ -195,6 +195,62 @@ describe('createSyncedQuery', () => {
       expect(statuses).toContain('live');
       dispose();
     });
+
+    it('does not miss live events published while backward fetch is still pending', async () => {
+      const backwardSubject = new Subject<{ event: NostrEvent; from: string }>();
+      const forwardSubject = new Subject<{ event: NostrEvent; from: string }>();
+      const allEvents$ = new Subject<{ event: NostrEvent; from: string }>();
+      let forwardActive = false;
+
+      const rxNostr = {
+        createAllEventObservable: () => allEvents$.asObservable(),
+        use: vi.fn((rxReq: any) => {
+          const strategy = rxReq?.strategy ?? rxReq?._strategy;
+          if (strategy === 'backward') {
+            return backwardSubject.asObservable();
+          }
+          if (strategy === 'forward') {
+            forwardActive = true;
+            return new Observable<{ event: NostrEvent; from: string }>((subscriber) => {
+              const sub = forwardSubject.subscribe(subscriber);
+              return () => {
+                forwardActive = false;
+                sub.unsubscribe();
+              };
+            });
+          }
+          return new Subject<{ event: NostrEvent; from: string }>().asObservable();
+        }),
+      };
+
+      connectStore(rxNostr as any, store);
+
+      const { events$, dispose } = createSyncedQuery(rxNostr as any, store, {
+        filter: { kinds: [1] },
+        strategy: 'dual',
+      });
+
+      const seenSnapshots: string[][] = [];
+      const sub = events$.subscribe((events) => {
+        seenSnapshots.push(events.map((cached) => cached.event.id));
+      });
+
+      await wait();
+      expect(forwardActive).toBe(true);
+
+      const liveEvent = makeEvent({ id: 'live-during-backfill', created_at: 2000 });
+      forwardSubject.next({ event: liveEvent, from: 'wss://relay' });
+      allEvents$.next({ event: liveEvent, from: 'wss://relay' });
+
+      await wait();
+      backwardSubject.complete();
+      await wait();
+
+      expect(seenSnapshots.at(-1)).toContain('live-during-backfill');
+
+      sub.unsubscribe();
+      dispose();
+    });
   });
 
   describe('on option (relay targeting)', () => {
