@@ -1,5 +1,5 @@
 import type { NostrFilter } from '../types.js';
-import type { StorageBackend, StoredEvent } from './interface.js';
+import type { StorageBackend, StoredEvent, ReplaceDeletionRecord } from './interface.js';
 import { memoryBackend as createMemoryBackend } from './memory.js';
 
 export interface CachedBackendOptions {
@@ -75,6 +75,10 @@ export function cachedBackend(
       return results;
     },
 
+    async count(filter: NostrFilter): Promise<number> {
+      return inner.count(filter);
+    },
+
     async delete(eventId: string): Promise<void> {
       await Promise.all([cache.delete(eventId), inner.delete(eventId)]);
     },
@@ -85,6 +89,38 @@ export function cachedBackend(
 
     async clear(): Promise<void> {
       await Promise.all([cache.clear(), inner.clear()]);
+    },
+
+    async markDeleted(eventId: string, deletedBy: string, deletedAt: number): Promise<void> {
+      return inner.markDeleted(eventId, deletedBy, deletedAt);
+    },
+
+    async isDeleted(eventId: string, pubkey?: string): Promise<boolean> {
+      return inner.isDeleted(eventId, pubkey);
+    },
+
+    async markReplaceDeletion(
+      aTagHash: string,
+      deletedBy: string,
+      deletedAt: number,
+    ): Promise<void> {
+      return inner.markReplaceDeletion(aTagHash, deletedBy, deletedAt);
+    },
+
+    async getReplaceDeletion(aTagHash: string): Promise<ReplaceDeletionRecord | null> {
+      return inner.getReplaceDeletion(aTagHash);
+    },
+
+    async setNegative(eventId: string, ttl: number): Promise<void> {
+      return inner.setNegative(eventId, ttl);
+    },
+
+    async isNegative(eventId: string): Promise<boolean> {
+      return inner.isNegative(eventId);
+    },
+
+    async cleanExpiredNegative(): Promise<void> {
+      return inner.cleanExpiredNegative();
     },
   };
 }
