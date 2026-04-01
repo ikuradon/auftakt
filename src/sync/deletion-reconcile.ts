@@ -2,6 +2,11 @@ import { Subject } from 'rxjs';
 import type { EventStore } from '../core/store.js';
 import type { RxNostrLike, EventPacketLike } from './synced-query.js';
 
+export interface ReconcileOptions {
+  maxEventIds?: number; // default: 10000
+  concurrency?: number; // default: 5
+}
+
 /**
  * Fetch kind:5 deletion events from relays for given event IDs.
  * Applies any discovered deletions to the store via store.add().
@@ -11,19 +16,40 @@ export async function reconcileDeletions(
   rxNostr: RxNostrLike,
   store: EventStore,
   eventIds?: string[],
+  options?: ReconcileOptions,
 ): Promise<void> {
   // If no eventIds provided, skip (caller should provide from their cache)
   if (!eventIds || eventIds.length === 0) return;
 
-  const CHUNK_SIZE = 50;
-  const promises: Promise<void>[] = [];
+  const maxEventIds = options?.maxEventIds ?? 10_000;
+  const concurrency = options?.concurrency ?? 5;
 
-  for (let i = 0; i < eventIds.length; i += CHUNK_SIZE) {
-    const chunk = eventIds.slice(i, i + CHUNK_SIZE);
-    promises.push(fetchDeletionsForChunk(rxNostr, store, chunk));
+  // Truncate to maxEventIds, keeping the most recent (end of array)
+  const ids = eventIds.length > maxEventIds ? eventIds.slice(-maxEventIds) : eventIds;
+
+  const CHUNK_SIZE = 50;
+  const chunks: string[][] = [];
+
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    chunks.push(ids.slice(i, i + CHUNK_SIZE));
   }
 
-  await Promise.all(promises);
+  await pMap(chunks, (chunk) => fetchDeletionsForChunk(rxNostr, store, chunk), concurrency);
+}
+
+async function pMap<T>(
+  items: T[],
+  fn: (item: T) => Promise<void>,
+  concurrency: number,
+): Promise<void> {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift()!;
+      await fn(item);
+    }
+  });
+  await Promise.all(workers);
 }
 
 function fetchDeletionsForChunk(

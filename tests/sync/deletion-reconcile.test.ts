@@ -87,4 +87,98 @@ describe('reconcileDeletions', () => {
     // 120 ids / 50 per chunk = 3 calls
     expect(mockRxNostr.use).toHaveBeenCalledTimes(3);
   });
+
+  it('limits concurrency to the configured value', async () => {
+    const store = createEventStore({ backend: memoryBackend() });
+    let activeConcurrency = 0;
+    let maxObservedConcurrency = 0;
+
+    const mockRxNostr = {
+      use: vi.fn(() => {
+        activeConcurrency++;
+        maxObservedConcurrency = Math.max(maxObservedConcurrency, activeConcurrency);
+        const subject = new Subject<any>();
+        // Delay completion to allow concurrency measurement
+        setTimeout(() => {
+          activeConcurrency--;
+          subject.complete();
+        }, 20);
+        return subject.asObservable();
+      }),
+    };
+
+    // 300 ids = 6 chunks of 50, with concurrency=2
+    const ids = Array.from({ length: 300 }, (_, i) => `id${i}`);
+    await reconcileDeletions(mockRxNostr as any, store, ids, { concurrency: 2 });
+
+    expect(mockRxNostr.use).toHaveBeenCalledTimes(6);
+    expect(maxObservedConcurrency).toBeLessThanOrEqual(2);
+    expect(maxObservedConcurrency).toBeGreaterThanOrEqual(1);
+  });
+
+  it('defaults concurrency to 5', async () => {
+    const store = createEventStore({ backend: memoryBackend() });
+    let activeConcurrency = 0;
+    let maxObservedConcurrency = 0;
+
+    const mockRxNostr = {
+      use: vi.fn(() => {
+        activeConcurrency++;
+        maxObservedConcurrency = Math.max(maxObservedConcurrency, activeConcurrency);
+        const subject = new Subject<any>();
+        setTimeout(() => {
+          activeConcurrency--;
+          subject.complete();
+        }, 20);
+        return subject.asObservable();
+      }),
+    };
+
+    // 500 ids = 10 chunks of 50
+    const ids = Array.from({ length: 500 }, (_, i) => `id${i}`);
+    await reconcileDeletions(mockRxNostr as any, store, ids);
+
+    expect(mockRxNostr.use).toHaveBeenCalledTimes(10);
+    expect(maxObservedConcurrency).toBeLessThanOrEqual(5);
+  });
+
+  it('truncates eventIds to maxEventIds keeping most recent (end of array)', async () => {
+    const store = createEventStore({ backend: memoryBackend() });
+    const receivedIds: string[][] = [];
+
+    const mockRxNostr = {
+      use: vi.fn((_req: any) => {
+        const subject = new Subject<any>();
+        setTimeout(() => subject.complete(), 5);
+        return subject.asObservable();
+      }),
+    };
+
+    // 150 ids with maxEventIds=100 — should only process last 100
+    const ids = Array.from({ length: 150 }, (_, i) => `id${i}`);
+    await reconcileDeletions(mockRxNostr as any, store, ids, { maxEventIds: 100 });
+    await wait(50);
+
+    // 100 ids / 50 per chunk = 2 calls (not 3)
+    expect(mockRxNostr.use).toHaveBeenCalledTimes(2);
+  });
+
+  it('defaults maxEventIds to 10000', async () => {
+    const store = createEventStore({ backend: memoryBackend() });
+    const mockRxNostr = {
+      use: vi.fn(() => {
+        const subject = new Subject<any>();
+        setTimeout(() => subject.complete(), 5);
+        return subject.asObservable();
+      }),
+    };
+
+    // 10050 ids — should truncate to 10000, yielding 200 chunks
+    const ids = Array.from({ length: 10050 }, (_, i) => `id${i}`);
+    await reconcileDeletions(mockRxNostr as any, store, ids);
+    await wait(100);
+
+    // 10000 / 50 = 200 chunks
+    expect(mockRxNostr.use).toHaveBeenCalledTimes(200);
+  });
 });
