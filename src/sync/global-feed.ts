@@ -31,11 +31,16 @@ export function connectStore(
   });
 
   if (options?.reconcileDeletions && rxNostr.use) {
-    store.getAllEventIds().then((ids) => {
-      if (ids.length > 0) {
-        void reconcileDeletions(rxNostr as Parameters<typeof reconcileDeletions>[0], store, ids);
-      }
-    });
+    store
+      .getAllEventIds()
+      .then((ids) => {
+        if (ids.length > 0) {
+          void reconcileDeletions(rxNostr as Parameters<typeof reconcileDeletions>[0], store, ids);
+        }
+      })
+      .catch((err) => {
+        console.warn('[auftakt] Failed to get event IDs for deletion reconciliation:', err);
+      });
   }
 
   return () => {

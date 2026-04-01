@@ -108,49 +108,57 @@ export function createSyncedQuery(
   function startBackward(filter: NostrFilter, onComplete: () => void): void {
     releaseBackwardPool();
 
-    void sinceTracker.getSince(filter).then((latestCached) => {
-      if (disposed) return;
+    void sinceTracker
+      .getSince(filter)
+      .then((latestCached) => {
+        if (disposed) return;
 
-      const adjustedFilter = latestCached ? { ...filter, since: latestCached } : filter;
+        const adjustedFilter = latestCached ? { ...filter, since: latestCached } : filter;
 
-      const hash = hashFilter(adjustedFilter);
-      currentBackwardHash = hash;
+        const hash = hashFilter(adjustedFilter);
+        currentBackwardHash = hash;
 
-      const existing = backwardReqPool.get(hash);
-      if (existing && !existing.completed) {
-        existing.refCount++;
-        existing.completionCallbacks.push(() => {
-          lastFetchedAt = Date.now();
-          onComplete();
-        });
-        return;
-      }
-
-      const rxReq = createBackwardReq();
-      const useOptions = options.on ? { on: options.on } : undefined;
-
-      const entry: PoolEntry = {
-        subscription: rxNostr.use(rxReq, useOptions).subscribe({
-          complete: () => {
-            entry.completed = true;
-            for (const cb of entry.completionCallbacks) cb();
-          },
-        }),
-        refCount: 1,
-        completionCallbacks: [
-          () => {
+        const existing = backwardReqPool.get(hash);
+        if (existing && !existing.completed) {
+          existing.refCount++;
+          existing.completionCallbacks.push(() => {
             lastFetchedAt = Date.now();
             onComplete();
-          },
-        ],
-        completed: false,
-      };
+          });
+          return;
+        }
 
-      backwardReqPool.set(hash, entry);
+        const rxReq = createBackwardReq();
+        const useOptions = options.on ? { on: options.on } : undefined;
 
-      rxReq.emit(adjustedFilter);
-      rxReq.over!();
-    });
+        const entry: PoolEntry = {
+          subscription: rxNostr.use(rxReq, useOptions).subscribe({
+            complete: () => {
+              entry.completed = true;
+              for (const cb of entry.completionCallbacks) cb();
+            },
+          }),
+          refCount: 1,
+          completionCallbacks: [
+            () => {
+              lastFetchedAt = Date.now();
+              onComplete();
+            },
+          ],
+          completed: false,
+        };
+
+        backwardReqPool.set(hash, entry);
+
+        rxReq.emit(adjustedFilter);
+        rxReq.over!();
+      })
+      .catch(() => {
+        if (!disposed) {
+          statusSubject.next('complete');
+          onComplete();
+        }
+      });
   }
 
   function releaseBackwardPool(): void {
