@@ -15,9 +15,9 @@
       "types": "./dist/backends/memory.d.ts",
       "import": "./dist/backends/memory.js"
     },
-    "./backends/indexeddb": {
-      "types": "./dist/backends/indexeddb.d.ts",
-      "import": "./dist/backends/indexeddb.js"
+    "./backends/dexie": {
+      "types": "./dist/backends/dexie.d.ts",
+      "import": "./dist/backends/dexie.js"
     },
     "./sync": {
       "types": "./dist/sync/index.d.ts",
@@ -53,6 +53,7 @@
     "rxjs": "^7.8.0"
   },
   "dependencies": {
+    "dexie": "^4.4.2",
     "nostr-typedef": "^0.13.0"
   },
   "devDependencies": {
