@@ -66,7 +66,8 @@ jobs:
           test -f dist/index.js
           test -f dist/index.d.ts
           test -f dist/backends/memory.js
-          test -f dist/backends/indexeddb.js
+          test -f dist/backends/dexie.js
+          test -f dist/backends/cached.js
           test -f dist/sync/index.js
           test -f dist/adapters/svelte.js
 
