@@ -1,6 +1,6 @@
 {
   "name": "@ikuradon/auftakt",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reactive event store for rx-nostr with NIP semantics",
   "type": "module",
   "sideEffects": false,
