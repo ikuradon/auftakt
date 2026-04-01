@@ -20,7 +20,6 @@ export class QueryManager {
   private pendingFullRefresh = new Set<number>();
   private pendingAddedEvents = new Map<number, StoredEvent[]>();
   private flushScheduled = false;
-  private deletedIds: Set<string>;
   private queryFn: ((filter: NostrFilter) => Promise<StoredEvent[]>) | null = null;
 
   // Reverse indexes
@@ -28,9 +27,7 @@ export class QueryManager {
   private authorIndex = new Map<string, Set<number>>();
   private wildcardSet = new Set<number>();
 
-  constructor(deletedIds: Set<string>) {
-    this.deletedIds = deletedIds;
-  }
+  constructor() {}
 
   setQueryFn(fn: (filter: NostrFilter) => Promise<StoredEvent[]>): void {
     this.queryFn = fn;
@@ -221,7 +218,6 @@ export class QueryManager {
         if (events && events.length > 0) {
           const now = Math.floor(Date.now() / 1000);
           const newItems: CachedEvent[] = events
-            .filter((s) => !this.deletedIds.has(s.id))
             .filter((s) => !isExpired(s.event, now))
             .map((s) => ({ event: s.event, seenOn: s.seenOn, firstSeen: s.firstSeen }));
 
@@ -244,7 +240,6 @@ export class QueryManager {
   private toOutput(results: StoredEvent[]): CachedEvent[] {
     const now = Math.floor(Date.now() / 1000);
     return results
-      .filter((s) => !this.deletedIds.has(s.id))
       .filter((s) => !isExpired(s.event, now))
       .sort((a, b) => b.created_at - a.created_at)
       .map((s) => ({

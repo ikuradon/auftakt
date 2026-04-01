@@ -10,7 +10,6 @@ import type {
 import type { StorageBackend, StoredEvent } from '../backends/interface.js';
 import { classifyEvent, isExpired, getDTag, compareEventsForReplacement } from './nip-rules.js';
 import { QueryManager } from './query-manager.js';
-import { createNegativeCache, type NegativeCache } from './negative-cache.js';
 
 export interface EventStoreOptions {
   backend: StorageBackend;
@@ -129,11 +128,8 @@ function fetchFromRelay(
 
 export function createEventStore(options: EventStoreOptions): EventStore {
   const { backend } = options;
-  const deletedIds = new Set<string>();
-  const pendingDeletions = new Map<string, { pubkey: string; registeredAt: number }>();
   const changeSubject = new Subject<StoreChange>();
-  const queryManager = new QueryManager(deletedIds);
-  const negativeCache: NegativeCache = createNegativeCache();
+  const queryManager = new QueryManager();
   const inflight = new Map<string, Promise<CachedEvent | null>>();
   let connectFilter: ConnectStoreFilter | undefined;
   const maxEventSize = options.maxEventSize;
@@ -178,17 +174,17 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       eTargets.map((id) => backend.get(id).then((e) => [id, e] as const)),
     );
     for (const [targetId, existing] of existingEvents) {
+      // Persist deletion record first
+      await backend.markDeleted(targetId, event.pubkey, event.created_at);
+
       if (existing) {
         // NIP-09: "Publishing a deletion request against a deletion request has no effect"
         if (existing.kind === 5) continue;
         if (existing.pubkey === event.pubkey) {
-          deletedIds.add(targetId);
           await backend.delete(targetId);
           changeSubject.next({ event: existing.event, type: 'deleted' });
           queryManager.notifyDeletion(existing);
         }
-      } else {
-        pendingDeletions.set(targetId, { pubkey: event.pubkey, registeredAt: Date.now() });
       }
     }
 
@@ -201,49 +197,18 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       if (isNaN(kind) || kind < 0) continue;
       const dTag = dTagParts.join(':');
       if (pubkey !== event.pubkey) continue;
+
+      // Persist replace deletion record
+      const aTagHash = `${kind}:${pubkey}:${dTag}`;
+      await backend.markReplaceDeletion(aTagHash, event.pubkey, event.created_at);
+
       const existing = await backend.getByAddressableKey(kind, pubkey, dTag);
       if (existing && existing.created_at <= event.created_at) {
-        deletedIds.add(existing.id);
+        await backend.markDeleted(existing.id, event.pubkey, event.created_at);
         await backend.delete(existing.id);
         changeSubject.next({ event: existing.event, type: 'deleted' });
         queryManager.notifyDeletion(existing);
       }
-    }
-  }
-
-  function checkPendingDeletions(event: NostrEvent): boolean {
-    const pending = pendingDeletions.get(event.id);
-    if (!pending) return false;
-    pendingDeletions.delete(event.id);
-    if (pending.pubkey === event.pubkey) {
-      deletedIds.add(event.id);
-      return true;
-    }
-    return false;
-  }
-
-  const MAX_DELETED_IDS = 50_000;
-
-  function trimDeletedIds(): void {
-    if (deletedIds.size <= MAX_DELETED_IDS) return;
-    const iter = deletedIds.values();
-    const toRemove = deletedIds.size - MAX_DELETED_IDS;
-    for (let i = 0; i < toRemove; i++) {
-      deletedIds.delete(iter.next().value!);
-    }
-  }
-
-  function cleanPendingDeletions(): void {
-    const threshold = Date.now() - 5 * 60 * 1000;
-    for (const [id, entry] of pendingDeletions) {
-      if (entry.registeredAt < threshold) pendingDeletions.delete(id);
-    }
-    if (pendingDeletions.size > 10000) {
-      const entries = Array.from(pendingDeletions.entries()).sort(
-        (a, b) => a[1].registeredAt - b[1].registeredAt,
-      );
-      const toRemove = entries.slice(0, entries.length - 10000);
-      for (const [id] of toRemove) pendingDeletions.delete(id);
     }
   }
 
@@ -256,7 +221,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       if (classifyEvent(event) === 'ephemeral') return 'ephemeral';
 
       // Step 1.5: Already deleted
-      if (deletedIds.has(event.id)) return 'deleted';
+      if (await backend.isDeleted(event.id, event.pubkey)) return 'deleted';
 
       // Step 2: Duplicate
       const existing = await backend.get(event.id);
@@ -278,8 +243,6 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         await backend.put(stored);
         changeSubject.next({ event, type: 'added', relay: meta?.relay });
         queryManager.notifyPotentialChange(stored);
-        cleanPendingDeletions();
-        trimDeletedIds();
         return 'added';
       }
 
@@ -295,13 +258,10 @@ export function createEventStore(options: EventStoreOptions): EventStore {
           const stored = buildStoredEvent(event, meta);
           await backend.put(stored);
           // Check if the new event was pending deletion
-          const wasDeleted = checkPendingDeletions(event);
-          if (wasDeleted) {
+          if (await backend.isDeleted(event.id, event.pubkey)) {
             await backend.delete(event.id);
             changeSubject.next({ event, type: 'deleted', relay: meta?.relay });
             queryManager.notifyDeletion(stored);
-            cleanPendingDeletions();
-            trimDeletedIds();
             return 'deleted';
           }
           changeSubject.next({ event, type: 'replaced', relay: meta?.relay });
@@ -320,19 +280,40 @@ export function createEventStore(options: EventStoreOptions): EventStore {
           await backend.delete(existingAddr.id);
           const stored = buildStoredEvent(event, meta);
           await backend.put(stored);
-          // Check if the new event was pending deletion
-          const wasDeleted = checkPendingDeletions(event);
-          if (wasDeleted) {
+          // Check if the new event was pending deletion (e-tag)
+          if (await backend.isDeleted(event.id, event.pubkey)) {
             await backend.delete(event.id);
             changeSubject.next({ event, type: 'deleted', relay: meta?.relay });
             queryManager.notifyDeletion(stored);
-            cleanPendingDeletions();
-            trimDeletedIds();
+            return 'deleted';
+          }
+          // Check a-tag replace deletion
+          const aTagHash = `${event.kind}:${event.pubkey}:${dTag}`;
+          const replaceDel = await backend.getReplaceDeletion(aTagHash);
+          if (
+            replaceDel &&
+            replaceDel.deletedAt >= event.created_at &&
+            replaceDel.deletedBy === event.pubkey
+          ) {
+            await backend.delete(event.id);
+            changeSubject.next({ event, type: 'deleted', relay: meta?.relay });
+            queryManager.notifyDeletion(stored);
             return 'deleted';
           }
           changeSubject.next({ event, type: 'replaced', relay: meta?.relay });
           queryManager.notifyPotentialChange(stored, 'replaced');
           return 'replaced';
+        }
+
+        // No existing addressable — still check a-tag replace deletion for new addressable events
+        const aTagHash = `${event.kind}:${event.pubkey}:${dTag}`;
+        const replaceDel = await backend.getReplaceDeletion(aTagHash);
+        if (
+          replaceDel &&
+          replaceDel.deletedAt >= event.created_at &&
+          replaceDel.deletedBy === event.pubkey
+        ) {
+          return 'deleted';
         }
       }
 
@@ -340,21 +321,16 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       const stored = buildStoredEvent(event, meta);
       await backend.put(stored);
 
-      // Step 8: Check pending deletions
-      const wasDeleted = checkPendingDeletions(event);
-      if (wasDeleted) {
+      // Step 8: Check pending deletions via backend
+      if (await backend.isDeleted(event.id, event.pubkey)) {
         await backend.delete(event.id);
         changeSubject.next({ event, type: 'deleted', relay: meta?.relay });
         queryManager.notifyDeletion(stored);
-        cleanPendingDeletions();
-        trimDeletedIds();
         return 'deleted';
       }
 
       changeSubject.next({ event, type: 'added', relay: meta?.relay });
       queryManager.notifyPotentialChange(stored, 'added');
-      cleanPendingDeletions();
-      trimDeletedIds();
       return 'added';
     },
 
@@ -387,7 +363,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       const promise = (async (): Promise<CachedEvent | null> => {
         // Step 1: Check local store (cache hit — return regardless of signal)
         const existing = await backend.get(eventId);
-        if (existing && !deletedIds.has(existing.id)) {
+        if (existing) {
           return {
             event: existing.event,
             seenOn: existing.seenOn,
@@ -396,7 +372,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
         }
 
         // Step 2: Negative cache
-        if (negativeCache.has(eventId)) return null;
+        if (await backend.isNegative(eventId)) return null;
 
         // Step 2.5: Check abort before relay fetch
         if (signal?.aborted) {
@@ -429,7 +405,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
           if (fetched) {
             await store.add(fetched.event, { relay: fetched.relay });
             const stored = await backend.get(eventId);
-            if (stored && !deletedIds.has(stored.id)) {
+            if (stored) {
               return {
                 event: stored.event,
                 seenOn: stored.seenOn,
@@ -441,7 +417,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
         // Step 4: Not found → register negative cache
         if (options?.negativeTTL) {
-          negativeCache.set(eventId, options.negativeTTL);
+          await backend.setNegative(eventId, options.negativeTTL);
         }
 
         return null;
@@ -463,7 +439,6 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       const results = await backend.query(filter);
       const now = Math.floor(Date.now() / 1000);
       return results
-        .filter((s) => !deletedIds.has(s.id))
         .filter((s) => !isExpired(s.event, now))
         .sort((a, b) => b.created_at - a.created_at)
         .slice(0, filter.limit ?? Infinity)
@@ -473,11 +448,11 @@ export function createEventStore(options: EventStoreOptions): EventStore {
     async count(filter: NostrFilter): Promise<number> {
       const results = await backend.query({ ...filter, limit: undefined });
       const now = Math.floor(Date.now() / 1000);
-      return results.filter((s) => !deletedIds.has(s.id) && !isExpired(s.event, now)).length;
+      return results.filter((s) => !isExpired(s.event, now)).length;
     },
 
     async delete(eventId: string): Promise<void> {
-      deletedIds.add(eventId);
+      await backend.markDeleted(eventId, '', 0);
       const stored = await backend.get(eventId);
       await backend.delete(eventId);
       if (stored) {
