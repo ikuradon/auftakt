@@ -21,6 +21,8 @@ export class QueryManager {
   private pendingAddedEvents = new Map<number, StoredEvent[]>();
   private flushScheduled = false;
   private queryFn: ((filter: NostrFilter) => Promise<StoredEvent[]>) | null = null;
+  private flushPromise: Promise<void> = Promise.resolve();
+  private settledCallbacks: Array<() => void> = [];
 
   // Reverse indexes
   private kindIndex = new Map<number, Set<number>>();
@@ -57,6 +59,20 @@ export class QueryManager {
     }
   }
 
+  /**
+   * Returns a Promise that resolves after the current pending flush completes.
+   * If no flush is pending, resolves immediately.
+   * Used by synced-query to delay status$ 'complete' until events$ is up-to-date.
+   */
+  whenSettled(): Promise<void> {
+    if (!this.flushScheduled && this.settledCallbacks.length === 0) {
+      return this.flushPromise;
+    }
+    return new Promise<void>((resolve) => {
+      this.settledCallbacks.push(resolve);
+    });
+  }
+
   disposeAll(): void {
     for (const query of this.queries.values()) {
       query.subject.complete();
@@ -68,6 +84,9 @@ export class QueryManager {
     this.kindIndex.clear();
     this.authorIndex.clear();
     this.wildcardSet.clear();
+    // Resolve any pending settled callbacks
+    for (const cb of this.settledCallbacks) cb();
+    this.settledCallbacks = [];
   }
 
   notifyPotentialChange(event: StoredEvent, changeType: ChangeType = 'added'): void {
@@ -194,15 +213,20 @@ export class QueryManager {
     this.pendingAddedEvents.clear();
     this.flushScheduled = false;
 
-    if (!this.queryFn) return;
+    if (!this.queryFn) {
+      this.resolveSettled();
+      return;
+    }
+
+    const asyncOps: Promise<void>[] = [];
 
     for (const queryId of dirty) {
       const query = this.queries.get(queryId);
       if (!query) continue;
 
       if (fullRefresh.has(queryId)) {
-        // Full backend query
-        this.queryFn(query.filter)
+        // Full backend query (async)
+        const op = this.queryFn(query.filter)
           .then((results) => {
             if (!this.queries.has(queryId)) return;
             const output = this.toOutput(results);
@@ -212,8 +236,9 @@ export class QueryManager {
           .catch((err) => {
             console.warn('[auftakt] Query refresh failed:', err);
           });
+        asyncOps.push(op);
       } else {
-        // Differential: insert added events into cached results
+        // Differential: insert added events into cached results (sync)
         const events = addedEvents.get(queryId);
         if (events && events.length > 0) {
           const now = Math.floor(Date.now() / 1000);
@@ -235,6 +260,18 @@ export class QueryManager {
         }
       }
     }
+
+    if (asyncOps.length > 0) {
+      this.flushPromise = Promise.all(asyncOps).then(() => this.resolveSettled());
+    } else {
+      this.resolveSettled();
+    }
+  }
+
+  private resolveSettled(): void {
+    const callbacks = this.settledCallbacks;
+    this.settledCallbacks = [];
+    for (const cb of callbacks) cb();
   }
 
   private toOutput(results: StoredEvent[]): CachedEvent[] {

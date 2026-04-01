@@ -63,6 +63,8 @@ export interface EventStore {
   _setConnectFilter(filter: ConnectStoreFilter | undefined): void;
   /** @internal Used by createSyncedQuery to check for filter mismatch */
   _getConnectFilter(): ConnectStoreFilter | undefined;
+  /** @internal Wait for pending QueryManager flush to complete. Used by synced-query. */
+  _whenQuerySettled(): Promise<void>;
   changes$: Observable<StoreChange>;
 }
 
@@ -480,6 +482,10 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
     _getConnectFilter(): ConnectStoreFilter | undefined {
       return connectFilter;
+    },
+
+    _whenQuerySettled(): Promise<void> {
+      return queryManager.whenSettled();
     },
   };
 

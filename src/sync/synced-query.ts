@@ -135,7 +135,12 @@ export function createSyncedQuery(
           subscription: rxNostr.use(rxReq, useOptions).subscribe({
             complete: () => {
               entry.completed = true;
-              for (const cb of entry.completionCallbacks) cb();
+              // Wait for QueryManager flush to complete before firing callbacks.
+              // This prevents the race where status$ emits 'complete' before
+              // events$ has been updated with the final query results.
+              void store._whenQuerySettled().then(() => {
+                for (const cb of entry.completionCallbacks) cb();
+              });
             },
           }),
           refCount: 1,
