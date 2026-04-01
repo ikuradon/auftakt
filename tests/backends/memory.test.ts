@@ -20,13 +20,20 @@ const makeStored = (
     _tag_index?: string[];
     _d_tag?: string;
   } = {},
-): StoredEvent => ({
-  event: { ...baseEvent, ...overrides.event } as NostrEvent,
-  seenOn: overrides.seenOn ?? ['wss://relay1'],
-  firstSeen: Date.now(),
-  _tag_index: overrides._tag_index ?? [],
-  _d_tag: overrides._d_tag ?? '',
-});
+): StoredEvent => {
+  const event = { ...baseEvent, ...overrides.event } as NostrEvent;
+  return {
+    id: event.id,
+    pubkey: event.pubkey,
+    kind: event.kind,
+    created_at: event.created_at,
+    event,
+    seenOn: overrides.seenOn ?? ['wss://relay1'],
+    firstSeen: Date.now(),
+    _tag_index: overrides._tag_index ?? [],
+    _d_tag: overrides._d_tag ?? '',
+  };
+};
 
 describe('memoryBackend', () => {
   let backend: StorageBackend;
@@ -123,5 +130,109 @@ describe('memoryBackend', () => {
     await backend.put(makeStored({ event: { id: 'a' } }));
     await backend.clear();
     expect(await backend.get('a')).toBeNull();
+  });
+
+  describe('count()', () => {
+    it('counts matching events', async () => {
+      await backend.put(makeStored({ event: { id: 'a', kind: 1 } }));
+      await backend.put(makeStored({ event: { id: 'b', kind: 1 } }));
+      await backend.put(makeStored({ event: { id: 'c', kind: 7 } }));
+      expect(await backend.count({ kinds: [1] })).toBe(2);
+    });
+
+    it('returns 0 for no matches', async () => {
+      expect(await backend.count({ kinds: [999] })).toBe(0);
+    });
+  });
+
+  describe('markDeleted / isDeleted', () => {
+    it('marks an event as deleted and checks', async () => {
+      await backend.markDeleted('e1', 'pk1', 1000);
+      expect(await backend.isDeleted('e1')).toBe(true);
+    });
+
+    it('returns false for non-deleted event', async () => {
+      expect(await backend.isDeleted('e1')).toBe(false);
+    });
+
+    it('checks pubkey match when provided', async () => {
+      await backend.markDeleted('e1', 'pk1', 1000);
+      expect(await backend.isDeleted('e1', 'pk1')).toBe(true);
+      expect(await backend.isDeleted('e1', 'pk2')).toBe(false);
+    });
+
+    it('empty deletedBy matches any pubkey', async () => {
+      await backend.markDeleted('e1', '', 0);
+      expect(await backend.isDeleted('e1', 'pk1')).toBe(true);
+      expect(await backend.isDeleted('e1', 'pk2')).toBe(true);
+    });
+
+    it('clear removes deleted records', async () => {
+      await backend.markDeleted('e1', 'pk1', 1000);
+      await backend.clear();
+      expect(await backend.isDeleted('e1')).toBe(false);
+    });
+  });
+
+  describe('markReplaceDeletion / getReplaceDeletion', () => {
+    it('stores and retrieves replace deletion record', async () => {
+      await backend.markReplaceDeletion('hash1', 'pk1', 2000);
+      const record = await backend.getReplaceDeletion('hash1');
+      expect(record).toEqual({ aTagHash: 'hash1', deletedBy: 'pk1', deletedAt: 2000 });
+    });
+
+    it('returns null for non-existent hash', async () => {
+      expect(await backend.getReplaceDeletion('missing')).toBeNull();
+    });
+
+    it('updates to newer deletedAt only', async () => {
+      await backend.markReplaceDeletion('hash1', 'pk1', 2000);
+      await backend.markReplaceDeletion('hash1', 'pk1', 1000); // older, should not update
+      const record = await backend.getReplaceDeletion('hash1');
+      expect(record!.deletedAt).toBe(2000);
+    });
+
+    it('updates when newer', async () => {
+      await backend.markReplaceDeletion('hash1', 'pk1', 1000);
+      await backend.markReplaceDeletion('hash1', 'pk1', 3000);
+      const record = await backend.getReplaceDeletion('hash1');
+      expect(record!.deletedAt).toBe(3000);
+    });
+
+    it('clear removes replace deletion records', async () => {
+      await backend.markReplaceDeletion('hash1', 'pk1', 2000);
+      await backend.clear();
+      expect(await backend.getReplaceDeletion('hash1')).toBeNull();
+    });
+  });
+
+  describe('setNegative / isNegative / cleanExpiredNegative', () => {
+    it('sets and checks negative cache', async () => {
+      await backend.setNegative('e1', 60_000);
+      expect(await backend.isNegative('e1')).toBe(true);
+    });
+
+    it('returns false for non-existent entry', async () => {
+      expect(await backend.isNegative('e1')).toBe(false);
+    });
+
+    it('returns false for expired entry', async () => {
+      await backend.setNegative('e1', -1); // already expired
+      expect(await backend.isNegative('e1')).toBe(false);
+    });
+
+    it('cleanExpiredNegative removes expired entries', async () => {
+      await backend.setNegative('e1', -1); // already expired
+      await backend.setNegative('e2', 60_000); // still valid
+      await backend.cleanExpiredNegative();
+      // e1 should be cleaned (isNegative already removes on check, but cleanExpiredNegative batch cleans)
+      expect(await backend.isNegative('e2')).toBe(true);
+    });
+
+    it('clear removes negative cache', async () => {
+      await backend.setNegative('e1', 60_000);
+      await backend.clear();
+      expect(await backend.isNegative('e1')).toBe(false);
+    });
   });
 });

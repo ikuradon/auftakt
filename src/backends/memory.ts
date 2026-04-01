@@ -1,5 +1,5 @@
 import type { NostrFilter } from '../types.js';
-import type { StorageBackend, StoredEvent } from './interface.js';
+import type { StorageBackend, StoredEvent, ReplaceDeletionRecord } from './interface.js';
 import { matchesFilter } from '../core/filter-matcher.js';
 
 const DEFAULT_BUDGETS: Record<number, number> = {
@@ -28,6 +28,9 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
   const accessTime = new Map<string, number>();
   const byKind = new Map<number, Set<string>>();
   const byAuthor = new Map<string, Set<string>>();
+  const deletedRecords = new Map<string, { deletedBy: string; deletedAt: number }>();
+  const replaceDeletions = new Map<string, ReplaceDeletionRecord>();
+  const negativeCache = new Map<string, number>(); // eventId → expiresAt (Date.now based)
   let pinnedIds = new Set<string>();
   let accessCounter = 0;
 
@@ -88,7 +91,7 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
     if (!stored) return;
     byId.delete(eventId);
     accessTime.delete(eventId);
-    const { kind, pubkey } = stored.event;
+    const { kind, pubkey } = stored;
 
     // Clean kind index
     const kindSet = byKind.get(kind);
@@ -128,11 +131,10 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
     },
 
     async put(stored: StoredEvent): Promise<void> {
-      const { event } = stored;
-      byId.set(event.id, stored);
-      touch(event.id);
+      byId.set(stored.id, stored);
+      touch(stored.id);
 
-      const { kind, pubkey } = event;
+      const { kind, pubkey } = stored;
 
       // Maintain kind index
       let kindSet = byKind.get(kind);
@@ -140,7 +142,7 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
         kindSet = new Set();
         byKind.set(kind, kindSet);
       }
-      kindSet.add(event.id);
+      kindSet.add(stored.id);
 
       // Maintain author index
       let authorSet = byAuthor.get(pubkey);
@@ -148,13 +150,13 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
         authorSet = new Set();
         byAuthor.set(pubkey, authorSet);
       }
-      authorSet.add(event.id);
+      authorSet.add(stored.id);
 
       if (kind === 0 || kind === 3 || (kind >= 10000 && kind < 20000)) {
-        byReplaceableKey.set(`${kind}:${pubkey}`, event.id);
+        byReplaceableKey.set(`${kind}:${pubkey}`, stored.id);
       }
       if (kind >= 30000 && kind < 40000) {
-        byAddressableKey.set(`${kind}:${pubkey}:${stored._d_tag}`, event.id);
+        byAddressableKey.set(`${kind}:${pubkey}:${stored._d_tag}`, stored.id);
       }
 
       runEviction(kind);
@@ -238,16 +240,21 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
       }
 
       for (const stored of results) {
-        touch(stored.event.id);
+        touch(stored.id);
       }
 
-      results.sort((a, b) => b.event.created_at - a.event.created_at);
+      results.sort((a, b) => b.created_at - a.created_at);
 
       if (filter.limit !== undefined && filter.limit > 0) {
         return results.slice(0, filter.limit);
       }
 
       return results;
+    },
+
+    async count(filter: NostrFilter): Promise<number> {
+      const results = await this.query({ ...filter, limit: undefined });
+      return results.length;
     },
 
     async delete(eventId: string): Promise<void> {
@@ -265,6 +272,59 @@ export function memoryBackend(options?: MemoryBackendOptions): MemoryBackend {
       accessTime.clear();
       byKind.clear();
       byAuthor.clear();
+      deletedRecords.clear();
+      replaceDeletions.clear();
+      negativeCache.clear();
+    },
+
+    async markDeleted(eventId: string, deletedBy: string, deletedAt: number): Promise<void> {
+      deletedRecords.set(eventId, { deletedBy, deletedAt });
+    },
+
+    async isDeleted(eventId: string, pubkey?: string): Promise<boolean> {
+      const record = deletedRecords.get(eventId);
+      if (!record) return false;
+      // If pubkey is provided, check that the deletion was by the same pubkey or by '' (explicit delete)
+      if (pubkey !== undefined && record.deletedBy !== '' && record.deletedBy !== pubkey) {
+        return false;
+      }
+      return true;
+    },
+
+    async markReplaceDeletion(
+      aTagHash: string,
+      deletedBy: string,
+      deletedAt: number,
+    ): Promise<void> {
+      const existing = replaceDeletions.get(aTagHash);
+      if (!existing || deletedAt > existing.deletedAt) {
+        replaceDeletions.set(aTagHash, { aTagHash, deletedBy, deletedAt });
+      }
+    },
+
+    async getReplaceDeletion(aTagHash: string): Promise<ReplaceDeletionRecord | null> {
+      return replaceDeletions.get(aTagHash) ?? null;
+    },
+
+    async setNegative(eventId: string, ttl: number): Promise<void> {
+      negativeCache.set(eventId, Date.now() + ttl);
+    },
+
+    async isNegative(eventId: string): Promise<boolean> {
+      const expiresAt = negativeCache.get(eventId);
+      if (expiresAt === undefined) return false;
+      if (Date.now() >= expiresAt) {
+        negativeCache.delete(eventId);
+        return false;
+      }
+      return true;
+    },
+
+    async cleanExpiredNegative(): Promise<void> {
+      const now = Date.now();
+      for (const [id, expiresAt] of negativeCache) {
+        if (expiresAt <= now) negativeCache.delete(id);
+      }
     },
   };
 }
