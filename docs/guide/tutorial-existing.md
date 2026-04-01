@@ -264,5 +264,5 @@ events$.subscribe((events) => {
 ## 次のステップ
 
 - [コアコンセプト](/guide/core-concepts) — store.add() の内部フローを理解する
-- [バックエンド](/guide/backends) — IndexedDB で永続化する
+- [バックエンド](/guide/backends) — Dexie (IndexedDB) で永続化する
 - [パターン集](/guide/patterns) — スレッド、リアクション、optimistic publish

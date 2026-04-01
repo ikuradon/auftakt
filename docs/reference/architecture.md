@@ -32,12 +32,11 @@ src/
 │   ├── nip-rules.ts          # Event classification, replacement comparison
 │   ├── filter-matcher.ts     # Nostr filter ↔ event matching
 │   ├── query-manager.ts      # Reactive query registry, reverse index, diff update, micro-batching
-│   ├── negative-cache.ts     # TTL-based "not found" cache
 │   └── snapshot.ts           # localStorage save/load for fast paint
 ├── backends/
-│   ├── interface.ts          # StorageBackend contract
-│   ├── memory.ts             # In-memory with LRU eviction + kind budgets
-│   ├── indexeddb.ts          # IndexedDB with batch writes, SSR fallback, error policy
+│   ├── interface.ts          # StorageBackend contract + StoredEvent, DeletedRecord, ReplaceDeletionRecord
+│   ├── memory.ts             # In-memory with LRU eviction + kind budgets + deletion tracking
+│   ├── dexie.ts              # Dexie.js v4 (strfry-inspired schema, query heuristic, persistent deletion)
 │   └── cached.ts             # Read-through cache wrapper (lazy hydration)
 ├── sync/
 │   ├── synced-query.ts       # REQ lifecycle, strategies, REQ dedup, cache-aware since
@@ -54,15 +53,16 @@ src/
 ### Event Addition (store.add)
 
 ```
+0.   Validate structure → reject if invalid
 1.   Ephemeral? → reject
-1.5  In deletedIds? → reject (race condition prevention)
+1.5  backend.isDeleted()? → reject (persistent deletion record)
 2.   Duplicate? → update seenOn, return
 3.   NIP-40 expired? → reject
-4.   Kind 5? → process e-tag/a-tag deletions, register pendingDeletions
-5.   Replaceable? → compare created_at, replace if newer
-6.   Addressable? → compare (kind, pubkey, d-tag), replace if newer
+4.   Kind 5? → persist deletion records (markDeleted/markReplaceDeletion), delete targets
+5.   Replaceable? → compare created_at, replace if newer → check isDeleted
+6.   Addressable? → compare (kind, pubkey, d-tag), replace → check isDeleted + getReplaceDeletion
 7.   Regular → store
-8.   Check pendingDeletions → auto-delete if pending
+8.   Check backend.isDeleted → handle out-of-order arrival
 9.   Notify reactive queries (reverse index → micro-batch → diff update)
 ```
 

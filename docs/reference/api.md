@@ -12,7 +12,7 @@ Creates a new event store instance.
 
 | Property | Type | Default | Description |
 |----------|------|---------|-------------|
-| `backend` | `StorageBackend` | required | Storage backend (memory, indexeddb, cached) |
+| `backend` | `StorageBackend` | required | Storage backend (memory, dexie, cached) |
 | `indexedTags` | `string[]` | `undefined` (all) | Tag names to index for `#<tag>` queries. Default: all tags (NIP-01 compliant) |
 | `maxEventSize` | `number` | `undefined` | Maximum event size in characters (`JSON.stringify(event).length`). `undefined` = unlimited |
 
@@ -352,24 +352,19 @@ import { memoryBackend } from '@ikuradon/auftakt/backends/memory';
 
 See [Backends Guide](/guide/backends) for options.
 
-## indexedDBBackend
+## dexieBackend
 
 ```typescript
-import { indexedDBBackend } from '@ikuradon/auftakt/backends/indexeddb';
+import { dexieBackend } from '@ikuradon/auftakt/backends/dexie';
 ```
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `batchWrites` | `boolean` | `false` | Buffer writes and flush via `queueMicrotask()` |
+| `dbName` | `string` | `'auftakt'` | IndexedDB database name |
 
-### Additional Methods (IndexedDB only)
+Dexie.js v4 を使用した IndexedDB バックエンド。strfry 風のスキーマ設計とクエリヒューリスティックを実装。削除追跡・ネガティブキャッシュは専用テーブルに永続化されます。
 
-```typescript
-await backend.markDeleted(eventId, deletionEventId);
-const isDeleted = await backend.isDeleted(eventId);
-await backend.setNegative(eventId, expiresAt);
-const isNeg = await backend.isNegative(eventId);
-```
+詳細は [バックエンドガイド](/guide/backends) を参照。
 
 ## cachedBackend
 

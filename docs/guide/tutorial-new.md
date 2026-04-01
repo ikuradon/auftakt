@@ -52,7 +52,7 @@ export const store = createEventStore({
 });
 ```
 
-`memoryBackend()` はすべてをメモリに保持するバックエンドです。ブラウザアプリで永続化が必要なら `indexedDBBackend` を使います（[バックエンド](/guide/backends)参照）。
+`memoryBackend()` はすべてをメモリに保持するバックエンドです。ブラウザアプリで永続化が必要なら `dexieBackend` を使います（[バックエンド](/guide/backends)参照）。
 
 ## 4. rx-nostr とストアを接続する
 
@@ -198,5 +198,5 @@ process.on('SIGINT', () => {
 ## 次のステップ
 
 - [コアコンセプト](/guide/core-concepts) — store.add() の内部フローを理解する
-- [バックエンド](/guide/backends) — IndexedDB で永続化する
+- [バックエンド](/guide/backends) — Dexie (IndexedDB) で永続化する
 - [パターン集](/guide/patterns) — スレッド、リアクション、optimistic publish

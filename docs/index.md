@@ -20,7 +20,7 @@ features:
   - title: リアクティブクエリ
     details: Observable<CachedEvent[]> がストア変更時に再発行。逆引きインデックスとマイクロバッチで高速。
   - title: プラガブルバックエンド
-    details: Memory（LRU + kind 別バジェット）、IndexedDB（バッチ書込）、cachedBackend（read-through キャッシュ）。
+    details: Memory（LRU + kind 別バジェット）、Dexie（strfry 風スキーマ + 永続削除追跡）、cachedBackend（read-through キャッシュ）。
   - title: rx-nostr ネイティブ
     details: connectStore() でグローバルフィード、createSyncedQuery() で REQ ライフサイクルとキャッシュ対応 since。
 ---

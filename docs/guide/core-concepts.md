@@ -7,14 +7,14 @@
 ```
 0.   構造バリデーション（型チェック + サイズ制限）→ 不正なら 'rejected'
 1.   Ephemeral（kind 20000-29999）→ 保存せず 'ephemeral'
-1.5  deletedIds に存在 → 'deleted'（レース条件防止）
+1.5  backend.isDeleted() → 'deleted'（永続化された削除レコードを確認）
 2.   重複チェック → seenOn 更新、'duplicate'
 3.   NIP-40 有効期限切れ → 'expired'
-4.   Kind 5（削除） → e-tag / a-tag の削除処理 + pendingDeletions
-5.   Replaceable → created_at 比較 → 新しければ置換
-6.   Addressable → (kind, pubkey, d-tag) 比較 → 新しければ置換
+4.   Kind 5（削除） → e-tag / a-tag の削除処理（backend に永続記録）
+5.   Replaceable → created_at 比較 → 置換 → 削除チェック
+6.   Addressable → (kind, pubkey, d-tag) 比較 → 置換 → 削除 + a-tag 削除チェック
 7.   Regular → そのまま保存
-8.   pendingDeletions 確認 → 一致すれば即削除
+8.   backend.isDeleted 確認 → 到着順序の逆転に対応
 9.   リアクティブクエリ通知（逆引きインデックス → マイクロバッチ → 差分更新）
 ```
 
@@ -26,7 +26,7 @@
 |----|------|
 | `'added'` | 新規保存 |
 | `'replaced'` | Replaceable / Addressable の更新 |
-| `'deleted'` | 削除済み（deletedIds または pendingDeletions） |
+| `'deleted'` | 削除済み（backend に永続化された削除レコードに一致） |
 | `'duplicate'` | 同じ ID が既に存在 |
 | `'expired'` | NIP-40 有効期限切れ |
 | `'ephemeral'` | Ephemeral（保存対象外） |

@@ -56,7 +56,7 @@ status$.subscribe((status) => {
 |------|------|
 | **NIP 自動処理** | Replaceable, Addressable, Ephemeral, Kind 5 削除, NIP-40 有効期限 |
 | **リアクティブクエリ** | `Observable<CachedEvent[]>` — ストア変更時に自動再発行 |
-| **プラガブルバックエンド** | Memory, IndexedDB, cached（read-through ラッパー） |
+| **プラガブルバックエンド** | Memory, Dexie (IndexedDB), cached（read-through ラッパー） |
 | **REQ ライフサイクル管理** | backward / forward / dual 戦略、キャッシュ対応 since |
 | **REQ 重複排除** | 同一フィルタの backward REQ を共有（参照カウント方式） |
 | **イベント検証** | 構造バリデーション + サイズ制限（署名検証は呼び出し側の責務） |
@@ -66,5 +66,5 @@ status$.subscribe((status) => {
 - [チュートリアル: ゼロから始める](/guide/tutorial-new) — rx-nostr も初めての方向け
 - [チュートリアル: rx-nostr に追加する](/guide/tutorial-existing) — 既存アプリにキャッシュ層を追加
 - [コアコンセプト](/guide/core-concepts) — store.add() のフローと NIP セマンティクス
-- [バックエンド](/guide/backends) — Memory / IndexedDB / cached の使い分け
+- [バックエンド](/guide/backends) — Memory / Dexie / cached の使い分け
 - [API リファレンス](/reference/api) — 全 API の詳細
