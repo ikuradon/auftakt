@@ -1,9 +1,8 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { BehaviorSubject, Subject, Observable, firstValueFrom, filter, take } from 'rxjs';
 import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 import { createSyncedQuery } from '../../src/sync/synced-query.js';
-import { _resetReqPool } from '../../src/sync/synced-query.js';
 import type { NostrEvent, SyncStatus, CachedEvent } from '../../src/types.js';
 
 const makeEvent = (overrides: Partial<NostrEvent> = {}): NostrEvent => ({
@@ -42,10 +41,6 @@ function createMockRxNostr(events: NostrEvent[]) {
 }
 
 describe('P1: backward strategy race condition — status$ "complete" vs events$ final emit', () => {
-  beforeEach(() => {
-    _resetReqPool();
-  });
-
   it('events$ contains all events when status$ emits "complete"', async () => {
     const backend = memoryBackend();
     const store = createEventStore({ backend });

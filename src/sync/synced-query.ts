@@ -38,34 +38,12 @@ export interface EventPacketLike {
   from: string;
 }
 
-// Shared backward REQ pool (module-level singleton)
+// Backward REQ pool entry type (scoped to each EventStore instance)
 interface PoolEntry {
   subscription: Subscription;
   refCount: number;
   completionCallbacks: Array<() => void>;
   completed: boolean;
-}
-
-/**
- * Module-level singleton pool for backward REQ deduplication.
- * All createSyncedQuery instances share this pool.
- *
- * NOTE: If using multiple EventStore instances in the same process,
- * queries with identical filters across different stores will share
- * the same REQ. This is acceptable because connectStore() feeds
- * events from rx-nostr to the specific store — the REQ itself just
- * triggers relay responses that connectStore routes correctly.
- *
- * For tests: call _resetReqPool() in beforeEach to avoid cross-test leakage.
- */
-const backwardReqPool = new Map<string, PoolEntry>();
-
-/** @internal Reset pool for testing. Call in beforeEach. */
-export function _resetReqPool(): void {
-  for (const entry of backwardReqPool.values()) {
-    entry.subscription.unsubscribe();
-  }
-  backwardReqPool.clear();
 }
 
 function hashFilter(filter: NostrFilter): string {
@@ -84,6 +62,7 @@ export function createSyncedQuery(
   store: EventStore,
   options: SyncedQueryOptions,
 ): SyncedQueryResult {
+  const backwardReqPool = store._getBackwardReqPool() as Map<string, PoolEntry>;
   const statusSubject = new BehaviorSubject<SyncStatus>('cached');
   const eventsSubject = new BehaviorSubject<CachedEvent[]>([]);
   let disposed = false;

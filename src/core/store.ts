@@ -65,6 +65,10 @@ export interface EventStore {
   _getConnectFilter(): ConnectStoreFilter | undefined;
   /** @internal Wait for pending QueryManager flush to complete. Used by synced-query. */
   _whenQuerySettled(): Promise<void>;
+  /** @internal Backward REQ pool scoped to this store instance */
+  _getBackwardReqPool(): Map<string, unknown>;
+  /** @internal Reset backward REQ pool. For testing. */
+  _resetReqPool(): void;
   changes$: Observable<StoreChange>;
 }
 
@@ -135,6 +139,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
   const inflight = new Map<string, Promise<CachedEvent | null>>();
   let connectFilter: ConnectStoreFilter | undefined;
   const maxEventSize = options.maxEventSize;
+  const backwardReqPool = new Map<string, unknown>();
 
   function validateEvent(event: NostrEvent): boolean {
     if (typeof event.id !== 'string' || !event.id) return false;
@@ -486,6 +491,20 @@ export function createEventStore(options: EventStoreOptions): EventStore {
 
     _whenQuerySettled(): Promise<void> {
       return queryManager.whenSettled();
+    },
+
+    _getBackwardReqPool(): Map<string, unknown> {
+      return backwardReqPool;
+    },
+
+    _resetReqPool(): void {
+      for (const entry of backwardReqPool.values()) {
+        if (entry && typeof entry === 'object' && 'subscription' in entry) {
+          const sub = (entry as { subscription: { unsubscribe(): void } }).subscription;
+          sub.unsubscribe();
+        }
+      }
+      backwardReqPool.clear();
     },
   };
 

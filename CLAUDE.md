@@ -87,7 +87,7 @@ src/
 - カバレッジ閾値: 80%（statements, branches, functions, lines）
 - `fake-indexeddb/auto` — IndexedDBテスト
 - `@ikuradon/tsunagiya` — リレーモック統合テスト
-- REQ poolテスト間で共有 → `_resetReqPool()` をbeforeEachで呼ぶ
+- REQ poolはEventStoreインスタンスにスコープ → `store._resetReqPool()` をbeforeEachで呼ぶ
 
 ## 主要ファイル
 

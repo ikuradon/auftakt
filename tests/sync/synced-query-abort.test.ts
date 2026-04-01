@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { Subject, firstValueFrom } from 'rxjs';
-import { createSyncedQuery, _resetReqPool } from '../../src/sync/synced-query.js';
+import { createSyncedQuery } from '../../src/sync/synced-query.js';
 import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
 import type { NostrEvent } from '../../src/types.js';
@@ -27,10 +27,6 @@ function createMockRxNostr() {
 }
 
 describe('createSyncedQuery with AbortSignal', () => {
-  beforeEach(() => {
-    _resetReqPool();
-  });
-
   it('disposes on abort signal', async () => {
     const store = createEventStore({ backend: memoryBackend() });
     const rxNostr = createMockRxNostr();

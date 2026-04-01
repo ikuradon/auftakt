@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Subject } from 'rxjs';
-import { createSyncedQuery, _resetReqPool } from '../../src/sync/synced-query.js';
+import { createSyncedQuery } from '../../src/sync/synced-query.js';
 import { connectStore } from '../../src/sync/global-feed.js';
 import { createEventStore } from '../../src/core/store.js';
 import { memoryBackend } from '../../src/backends/memory.js';
@@ -25,8 +25,8 @@ describe('REQ deduplication', () => {
   let mockRxNostr: ReturnType<typeof createMockRxNostr>;
 
   beforeEach(() => {
-    _resetReqPool();
     store = createEventStore({ backend: memoryBackend() });
+    store._resetReqPool();
     mockRxNostr = createMockRxNostr();
     connectStore(mockRxNostr as any, store);
   });
