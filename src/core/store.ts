@@ -174,17 +174,19 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       eTargets.map((id) => backend.get(id).then((e) => [id, e] as const)),
     );
     for (const [targetId, existing] of existingEvents) {
-      // Persist deletion record first
-      await backend.markDeleted(targetId, event.pubkey, event.created_at);
-
       if (existing) {
         // NIP-09: "Publishing a deletion request against a deletion request has no effect"
         if (existing.kind === 5) continue;
         if (existing.pubkey === event.pubkey) {
+          // Persist deletion record only after pubkey verification
+          await backend.markDeleted(targetId, event.pubkey, event.created_at);
           await backend.delete(targetId);
           changeSubject.next({ event: existing.event, type: 'deleted' });
           queryManager.notifyDeletion(existing);
         }
+      } else {
+        // Target not yet in store — persist deletion record for future arrival
+        await backend.markDeleted(targetId, event.pubkey, event.created_at);
       }
     }
 
@@ -465,6 +467,7 @@ export function createEventStore(options: EventStoreOptions): EventStore {
       changeSubject.complete();
       queryManager.disposeAll();
       inflight.clear();
+      void backend.dispose?.();
     },
 
     async getAllEventIds(): Promise<string[]> {
