@@ -4,6 +4,10 @@ import type { StorageBackend, StoredEvent } from '../../src/backends/interface.j
 import type { NostrEvent } from '../../src/types.js';
 
 const makeStored = (id: string, kind = 1, overrides: Partial<StoredEvent> = {}): StoredEvent => ({
+  id,
+  pubkey: 'pk1',
+  kind,
+  created_at: 1000,
   event: {
     id,
     kind,

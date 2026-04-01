@@ -1,11 +1,27 @@
 import type { NostrEvent, NostrFilter } from '../types.js';
 
 export interface StoredEvent {
+  id: string;
+  pubkey: string;
+  kind: number;
+  created_at: number;
   event: NostrEvent;
   seenOn: string[];
   firstSeen: number;
   _tag_index: string[];
   _d_tag: string;
+}
+
+export interface DeletedRecord {
+  eventId: string;
+  deletedBy: string;
+  deletedAt: number;
+}
+
+export interface ReplaceDeletionRecord {
+  aTagHash: string;
+  deletedAt: number;
+  deletedBy: string;
 }
 
 export interface StorageBackend {
@@ -14,15 +30,16 @@ export interface StorageBackend {
   getByReplaceableKey(kind: number, pubkey: string): Promise<StoredEvent | null>;
   getByAddressableKey(kind: number, pubkey: string, dTag: string): Promise<StoredEvent | null>;
   query(filter: NostrFilter): Promise<StoredEvent[]>;
+  count(filter: NostrFilter): Promise<number>;
   delete(eventId: string): Promise<void>;
   getAllEventIds(): Promise<string[]>;
   clear(): Promise<void>;
-  /** Mark an event as deleted (persists in IDB, no-op in memory) */
-  markDeleted?(eventId: string, deletionEventId: string): Promise<void>;
-  /** Check if an event is marked as deleted */
-  isDeleted?(eventId: string): Promise<boolean>;
-  /** Set a negative cache entry with expiration timestamp */
-  setNegative?(eventId: string, expiresAt: number): Promise<void>;
-  /** Check if a negative cache entry exists and is not expired */
-  isNegative?(eventId: string): Promise<boolean>;
+  markDeleted(eventId: string, deletedBy: string, deletedAt: number): Promise<void>;
+  isDeleted(eventId: string, pubkey?: string): Promise<boolean>;
+  markReplaceDeletion(aTagHash: string, deletedBy: string, deletedAt: number): Promise<void>;
+  getReplaceDeletion(aTagHash: string): Promise<ReplaceDeletionRecord | null>;
+  setNegative(eventId: string, ttl: number): Promise<void>;
+  isNegative(eventId: string): Promise<boolean>;
+  cleanExpiredNegative(): Promise<void>;
+  dispose?(): Promise<void>;
 }

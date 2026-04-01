@@ -20,13 +20,20 @@ const makeStored = (
     _tag_index?: string[];
     _d_tag?: string;
   } = {},
-): StoredEvent => ({
-  event: { ...baseEvent, ...overrides.event } as NostrEvent,
-  seenOn: overrides.seenOn ?? ['wss://relay1'],
-  firstSeen: Date.now(),
-  _tag_index: overrides._tag_index ?? [],
-  _d_tag: overrides._d_tag ?? '',
-});
+): StoredEvent => {
+  const event = { ...baseEvent, ...overrides.event } as NostrEvent;
+  return {
+    id: event.id,
+    pubkey: event.pubkey,
+    kind: event.kind,
+    created_at: event.created_at,
+    event,
+    seenOn: overrides.seenOn ?? ['wss://relay1'],
+    firstSeen: Date.now(),
+    _tag_index: overrides._tag_index ?? [],
+    _d_tag: overrides._d_tag ?? '',
+  };
+};
 
 describe('memoryBackend indexed query', () => {
   let backend: StorageBackend;

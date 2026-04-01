@@ -25,7 +25,7 @@ function spyBackend(): StorageBackend & { deleteCalls: string[] } {
       return inner.delete(eventId);
     },
     deleteCalls,
-  };
+  } as StorageBackend & { deleteCalls: string[] };
 }
 
 describe('kind:5 deletion calls backend.delete()', () => {
@@ -79,7 +79,7 @@ describe('kind:5 deletion calls backend.delete()', () => {
     expect(stored).toBeNull();
   });
 
-  it('pendingDeletions path removes target from backend', async () => {
+  it('pendingDeletions path rejects target at step 1.5 via backend.isDeleted', async () => {
     const backend = spyBackend();
     const store = createEventStore({ backend });
 
@@ -94,10 +94,13 @@ describe('kind:5 deletion calls backend.delete()', () => {
       }),
     );
 
-    // Target arrives later — should be stored then immediately deleted
-    await store.add(makeEvent({ id: 'future-target', kind: 1, pubkey: 'pk1', created_at: 1000 }));
+    // Target arrives later — rejected at step 1.5 (isDeleted returns true)
+    const result = await store.add(
+      makeEvent({ id: 'future-target', kind: 1, pubkey: 'pk1', created_at: 1000 }),
+    );
 
-    expect(backend.deleteCalls).toContain('future-target');
+    expect(result).toBe('deleted');
+    // Event was never stored, so backend.delete was not called for it
     const stored = await backend.get('future-target');
     expect(stored).toBeNull();
   });
